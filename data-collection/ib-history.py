@@ -1,98 +1,148 @@
 import datetime
 import os
 import time
-
 from ib_insync import *
-
-DATA_DIR ="../data/raw/"
-MAX_DAYS = 200
-MAX_BATCH_PER_FILE = 13
-#
-endDateTime = ''
-endDateTime: datetime = datetime.datetime(2022, 3, 15, 16, 00, 00)
-#
-# contract = Contract(symbol="AAPL", secType="STK", currency="USD", exchange="SMART", includeExpired=False)
-contract = Contract(symbol="TSLA", secType="STK", currency="USD", exchange="SMART", includeExpired=False)
-#contract = Contract(conId=13455763, symbol="VIX", secType="IND", exchange="CBOE", currency="USD", includeExpired=False)
-#
-whatToShow = 'BID_ASK'
-#whatToShow = 'TRADES'
-
+import common.data_prep_common as dc
 
 # -- do not use, only 1 rec/day: whatToShow = 'HISTORICAL_VOLATILITY'
 # https://interactivebrokers.github.io/tws-api/historical_bars.html
 # Type        Open	         High	         Low	        Close	      Volume
 # ----------  -------------- -------------   -------------  ------------  -----------
 # TRADES	  First          Highest         Lowest         Last          Total
-#             traded price   traded price    traded price   traded price  traded Vol
+#             traded price                                                traded Vol
 # BID_ASK	  Time average   Max Ask	     Min Bid	    Time average  N/A
 #             Bid                                            ask
 # HISTORICAL  Starting       Highest         Lowest          Last          N/A
 # _VOLATILITY volatility	 volatility	     volatility	     volatility
+#
+# - Valid durationStr
+#    Unit	Description
+#    S	Seconds
+#    D	Day
+#    W	Week
+#    M	Month
+#    Y	Year
+#
+# - Valid Bar Sizes
+#    1 secs	5 secs	10 secs	15 secs	30 secs
+#    1 min	2 mins	3 mins	5 mins	10 mins	15 mins	20 mins	30 mins
+#    1 hour	2 hours	3 hours	4 hours	8 hours
+#    1 day
+#    1 week
+#    1 month
 
 #
 # os.system("say Starting!")
-
-def writeToFile():
-    global barsList
-    if len(barsList) == 0:
-        return
-    # allBars = [b for bars in reversed(barsList) for b in bars]
-    df = util.df(barsList)
-    fn = DATA_DIR + contract.symbol + "/" + contract.symbol + "-" + whatToShow + "-" + str(round(time.time())) + '.csv'
-    df.to_csv(fn, index=False)
-    barsList = []
-    print(f'   Written to file {fn}.  Next dt = ', endDateTime)
-
-
-ib = IB()
-ib.connect('127.0.0.1', 7496, clientId=1)
-
 t930 = datetime.time(9, 30, 0)
 t1600 = datetime.time(16, 0, 0)
 t1630 = datetime.time(16, 30, 0)
-barsList = []
-ctr_total = 0
 
-while ctr_total < (MAX_BATCH_PER_FILE * MAX_DAYS):  # 7 30min dur * MAX_DAYS days
-    ctr_total += 1
-    print(datetime.datetime.now(), 'Starting Request: ctr_total', ctr_total,  'next timestamp', endDateTime)
-    bars = ib.reqHistoricalData(
-        contract,
-        endDateTime=endDateTime,
-        # durationStr='1800 S',
-        durationStr='1800 S',
-        barSizeSetting='1 secs',
-        whatToShow=whatToShow,
-        useRTH=True,
-        formatDate=1)
+def getConfig():
+    l_config = {"contracts": [
+                    {
+                    "contract": {
+                        "conId": 265598, "symbol": "AAPL",
+                        "secType": "STK", "currency": "USD", "exchange": "SMART"
+                        },
+                    "barSizeSetting": '1 min', "durationStr": "10 D", "startDate": "20221025", "endDateTime": "",
+                    }, {
+                    "contract": {
+                        "conId": 587258975, "symbol": "AAPL 221104C00152500",
+                        "secType": "OPT", "currency": "USD", "exchange": "SMART"
+                        },
+                    "barSizeSetting": '1 min', "durationStr": "10 D", "startDate": "20221025",
+                    "endDateTime": ""
+                    }],
+                "tws": {
+                    "host": "127.0.0.1",
+                    "port": 7496,
+                    "quotes_flush_to_file_seconds": 60
+                },
+                "data_dir": "../data/raw/"
+    }
+
+    if os.path.exists("../config/workingConfig.json"):
+        l_config = dc.getConfig("../config/workingConfig.json", debugOutput=True)
+    elif os.path.exists("../config/Config.json"):
+        l_config = dc.getConfig("../config/Config.json", debugOutput=True)
+    else:
+        dc.writeConfigs("../config/Config.json", l_config)
+    return l_config
+
+
+def pull_and_save_data(ib, contract, endDateTime, durationStr: str,
+                       barSizeSetting: str, whatToShow: str, outFileName: str):
+    barsList = []
+    bars = None
+    print(dc.tn(), "      pull_and_save_data:", whatToShow, contract, durationStr, barSizeSetting, endDateTime)
+
+    try:
+        bars = ib.reqHistoricalData(contract, endDateTime=endDateTime, durationStr=durationStr,
+                                barSizeSetting=barSizeSetting, whatToShow=whatToShow, useRTH=True, formatDate=1)
+    except Exception as e:
+        print(e)
+        exit(1)
+
     if not bars:
-        print("empty data returned for endDateTime", endDateTime)
-        print("exiting.")
-        writeToFile()
-        exit()
+        print(dc.tn(), "empty data returned for endDateTime", endDateTime)
+        print(dc.tn(), "exiting.")
+        return
+
     for x in bars:
-        if x.date.time() >= t930 and x.date.time() <= t1600:
+        if t930 <= x.date.time() <= t1600:
             barsList.append(x)
-    print("      Return count: ", len(bars), len(barsList),  " for endDateTime: ", endDateTime, ' Next endDateTime: ', bars[0].date)
 
     endDateTime = bars[0].date
     if endDateTime.time() <= t930:
-        print("      endDateTime=",  endDateTime)
+        print(dc.tn(), "      endDateTime=", endDateTime)
         dt = datetime.timedelta(days=-1)
         endDateTime = endDateTime + dt
         endDateTime = endDateTime.replace(hour=16, minute=0, second=0)
-        print("      Replaced with =", endDateTime)
+        print(dc.tn(), "      Replaced with =", endDateTime)
     if endDateTime.time() >= t1630:
-        print("      endDateTime=", endDateTime)
+        print(dc.tn(), "      endDateTime=", endDateTime)
         endDateTime = endDateTime.replace(hour=16, minute=0, second=0)
-        print("      Replaced with =", endDateTime)
+        print(dc.tn(), "      Replaced with =", endDateTime)
         os.system("say data collection unexpectedly stopped")
 
-    ib.sleep(20)
-    # flush to file every so often
-    if (ctr_total % MAX_BATCH_PER_FILE) == 0:
-        writeToFile()
-# final write to file
-writeToFile()
+    dc.writeArrToFile(barsList, outFileName)
+    return endDateTime
+
+
+def main():
+    ib = IB()
+    ib.connect('127.0.0.1', 7496, clientId=1)
+    DATA_DIR = "../data/raw/"
+
+    configFile = getConfig()
+    configs = configFile.get("contracts")
+    for contract_idx in range(len(configs)):
+        pull_spec = configs[contract_idx]
+        contract = dc.getContract(pull_spec['contract'])
+        endDateTime = dc.getDateObj(pull_spec["endDateTime"])
+        startDateTime = dc.getDateObj(pull_spec["startDate"])
+        durationStr = pull_spec["durationStr"]
+        barSizeSetting = pull_spec["barSizeSetting"]
+
+        while endDateTime >= startDateTime:
+            print(dc.tn(), "Pulling:", contract.conId, "(", contract.conId, ") from", startDateTime, ' -to-', endDateTime)
+
+            whatToShow = 'TRADES'
+            outFileName = DATA_DIR + contract.symbol + "/" + whatToShow + "-" + str(round(time.time())) + '.csv'
+            newEndDateTime = pull_and_save_data(ib, contract, endDateTime, durationStr, barSizeSetting, whatToShow, outFileName)
+            ib.sleep(20)
+
+            whatToShow = 'BID_ASK'
+            outFileName = DATA_DIR + contract.symbol + "/" + whatToShow + "-" + str(round(time.time())) + '.csv'
+            newEndDateTime = pull_and_save_data(ib, contract, endDateTime, durationStr, barSizeSetting, whatToShow, outFileName)
+            ib.sleep(20)
+
+            endDateTime = newEndDateTime
+            configFile.get("contracts")[contract_idx]["endDateTime"] = dc.getStrFromDate(newEndDateTime)
+            dc.writeConfigs("../config/workingConfig.json", configFile, overwrite=True, debugOutput=True)
+
+
+if __name__ == "__main__":
+    main()
+
 os.system("say app done")
