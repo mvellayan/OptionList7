@@ -33,42 +33,10 @@ import common.data_prep_common as dc
 
 #
 # os.system("say Starting!")
+
 t930 = datetime.time(9, 30, 0)
 t1600 = datetime.time(16, 0, 0)
 t1630 = datetime.time(16, 30, 0)
-
-def getConfig():
-    l_config = {"contracts": [
-                    {
-                    "contract": {
-                        "conId": 265598, "symbol": "AAPL",
-                        "secType": "STK", "currency": "USD", "exchange": "SMART"
-                        },
-                    "barSizeSetting": '1 min', "durationStr": "10 D", "startDate": "20221025", "endDateTime": "",
-                    }, {
-                    "contract": {
-                        "conId": 587258975, "symbol": "AAPL 221104C00152500",
-                        "secType": "OPT", "currency": "USD", "exchange": "SMART"
-                        },
-                    "barSizeSetting": '1 min', "durationStr": "10 D", "startDate": "20221025",
-                    "endDateTime": ""
-                    }],
-                "tws": {
-                    "host": "127.0.0.1",
-                    "port": 7496,
-                    "quotes_flush_to_file_seconds": 60
-                },
-                "data_dir": "../data/raw/"
-    }
-
-    if os.path.exists("../config/workingConfig.json"):
-        l_config = dc.getConfig("../config/workingConfig.json", debugOutput=True)
-    elif os.path.exists("../config/Config.json"):
-        l_config = dc.getConfig("../config/Config.json", debugOutput=True)
-    else:
-        dc.writeConfigs("../config/Config.json", l_config)
-    return l_config
-
 
 def pull_and_save_data(ib, contract, endDateTime, durationStr: str,
                        barSizeSetting: str, whatToShow: str, outFileName: str):
@@ -113,8 +81,9 @@ def main():
     ib = IB()
     ib.connect('127.0.0.1', 7496, clientId=1)
     DATA_DIR = "../data/raw/"
+    PARAM_DIR = "../config/"
 
-    configFile = getConfig()
+    configFile = dc.getConfig(DATA_DIR, PARAM_DIR)
     configs = configFile.get("contracts")
     for contract_idx in range(len(configs)):
         pull_spec = configs[contract_idx]
@@ -139,7 +108,7 @@ def main():
 
             endDateTime = newEndDateTime
             configFile.get("contracts")[contract_idx]["endDateTime"] = dc.getStrFromDate(newEndDateTime)
-            dc.writeConfigs("../config/workingConfig.json", configFile, overwrite=True, debugOutput=True)
+            dc.writeJsonDict("../config/workingConfig.json", configFile, overwrite=True, debugOutput=True)
 
 
 if __name__ == "__main__":

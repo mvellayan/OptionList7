@@ -7,10 +7,43 @@ import json
 from os.path import exists
 from ib_insync import *
 from pathlib import Path
+import os
 
 
 def tn():
     return datetime.datetime.now().strftime("%H:%M:%S") + ": "
+
+def getConfig(data_dir: str, param_dir: str):
+    l_config = {"contracts": [
+                    {
+                    "contract": {
+                        "conId": 265598, "symbol": "AAPL",
+                        "secType": "STK", "currency": "USD", "exchange": "SMART"
+                        },
+                    "barSizeSetting": '1 min', "durationStr": "10 D", "startDate": "20221025", "endDateTime": "",
+                    }, {
+                    "contract": {
+                        "conId": 587258975, "symbol": "AAPL 221104C00152500",
+                        "secType": "OPT", "currency": "USD", "exchange": "SMART"
+                        },
+                    "barSizeSetting": '1 min', "durationStr": "10 D", "startDate": "20221025",
+                    "endDateTime": ""
+                    }],
+                "tws": {
+                    "host": "127.0.0.1",
+                    "port": 7496,
+                    "quotes_flush_to_file_seconds": 60
+                },
+                "data_dir": data_dir
+    }
+
+    if os.path.exists(param_dir + "workingConfig.json"):
+        l_config = readJsonDict(param_dir + "workingConfig.json", debugOutput=True)
+    elif os.path.exists(param_dir + "Config.json"):
+        l_config = readJsonDict(param_dir + "Config.json", debugOutput=True)
+    else:
+        writeJsonDict(param_dir + "Config.json", l_config)
+    return l_config
 
 
 def load_data(data_dir: str, max_files: int = 999):
@@ -56,7 +89,7 @@ def dedup(df):
     return df
 
 
-def getConfig(fn: str, debugOutput=True):
+def readJsonDict(fn: str, debugOutput=True):
 
     data = {}
 
@@ -72,7 +105,7 @@ def getConfig(fn: str, debugOutput=True):
 
     return data
 
-def writeConfigs(fn: str, data: dict, overwrite=False, debugOutput=True):
+def writeJsonDict(fn: str, data: dict, overwrite=False, debugOutput=True):
 
     if not overwrite and exists(fn):
         print(f"ERROR: file {fn} exists")
