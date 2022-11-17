@@ -40,7 +40,7 @@ t1630 = datetime.time(16, 30, 0)
 
 def pull_and_save_data(ib, contract, endDateTime, durationStr: str,
                        barSizeSetting: str, whatToShow: str, outFileName: str):
-    barsList = []
+    barsList=[]
     bars = None
     print(dc.tn(), "      pull_and_save_data:", whatToShow, contract, durationStr, barSizeSetting, endDateTime)
 
@@ -56,6 +56,8 @@ def pull_and_save_data(ib, contract, endDateTime, durationStr: str,
         print(dc.tn(), "exiting.")
         return
 
+    l_conId = contract.conId
+    l_symbol = contract.symbol
     for x in bars:
         if t930 <= x.date.time() <= t1600:
             barsList.append(x)
@@ -73,45 +75,46 @@ def pull_and_save_data(ib, contract, endDateTime, durationStr: str,
         print(dc.tn(), "      Replaced with =", endDateTime)
         os.system("say data collection unexpectedly stopped")
 
-    dc.writeArrToFile(barsList, outFileName)
+    dc.writeArrToFile(barsList, outFileName, l_conId, l_symbol)
     return endDateTime
 
 
-def main():
-    ib = IB()
-    ib.connect('127.0.0.1', 7496, clientId=1)
-    DATA_DIR = "../data/raw/"
-    PARAM_DIR = "../config/"
+def pull_contract(ib, DATA_DIR, PARAM_DIR, pull_spec):
 
-    configFile = dc.getConfig(DATA_DIR, PARAM_DIR)
-    configs = configFile.get("contracts")
-    for contract_idx in range(len(configs)):
-        pull_spec = configs[contract_idx]
         contract = dc.getContract(pull_spec['contract'])
         endDateTime = dc.getDateObj(pull_spec["endDateTime"])
         startDateTime = dc.getDateObj(pull_spec["startDate"])
         durationStr = pull_spec["durationStr"]
         barSizeSetting = pull_spec["barSizeSetting"]
+        symbol = contract.symbol.replace(" ", "")[0:4]
+        prefix = "sq" if contract.secType == "STK" else "oq"
 
         while endDateTime >= startDateTime:
+            time_str = str(round(time.time()))
             print(dc.tn(), "Pulling:", contract.conId, "(", contract.conId, ") from", startDateTime, ' -to-', endDateTime)
 
             whatToShow = 'TRADES'
-            outFileName = DATA_DIR + contract.symbol + "/" + whatToShow + "-" + str(round(time.time())) + '.csv'
+            outFileName = DATA_DIR + symbol + "/" + prefix + "-" + whatToShow + "-" + time_str + '.csv'
             newEndDateTime = pull_and_save_data(ib, contract, endDateTime, durationStr, barSizeSetting, whatToShow, outFileName)
-            ib.sleep(20)
+            ib.sleep(10)
 
             whatToShow = 'BID_ASK'
-            outFileName = DATA_DIR + contract.symbol + "/" + whatToShow + "-" + str(round(time.time())) + '.csv'
+            outFileName = DATA_DIR + symbol + "/" + prefix + "-" + whatToShow + "-" + time_str + '.csv'
             newEndDateTime = pull_and_save_data(ib, contract, endDateTime, durationStr, barSizeSetting, whatToShow, outFileName)
-            ib.sleep(20)
+            ib.sleep(10)
 
             endDateTime = newEndDateTime
-            configFile.get("contracts")[contract_idx]["endDateTime"] = dc.getStrFromDate(newEndDateTime)
-            dc.writeJsonDict("../config/workingConfig.json", configFile, overwrite=True, debugOutput=True)
 
 
 if __name__ == "__main__":
-    main()
+    ib = IB()
+    ib.connect('127.0.0.1', 7496, clientId=1)
+    DATA_DIR = "../data/raw/"
+    PARAM_DIR = "../data/raw/param/"
 
-os.system("say app done")
+    configFile = dc.getConfig(DATA_DIR, PARAM_DIR)
+    configs = configFile.get("contracts")
+    for config in configs:
+        pull_contract(ib, DATA_DIR, PARAM_DIR, config)
+
+# os.system("say app done")
