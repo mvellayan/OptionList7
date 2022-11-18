@@ -30,7 +30,7 @@ def execute_todos(todo_file):
         if todo_csv.iloc[ind]['status'] > '4':
             ind += 1
             continue
-        print(dc.tn() + f"  processing todo row:", ind, todo_csv.iloc[ind]['localSymbol'])
+        print(dc.tn() + f"  processing: {ind}/{todo_csv.shape[0]}: {todo_csv.iloc[ind]['localSymbol']}")
         c = Contract(conId=todo_csv.iloc[ind]['conId'],
                      secType=todo_csv.iloc[ind]['secType'],
                      exchange=todo_csv.iloc[ind]['exchange'],
