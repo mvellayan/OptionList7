@@ -44,11 +44,10 @@
                 find how many days history to pull
         5. Output to status/todo.csv file
 
-    4-pull-tasks
-        loop over 1 with trading days
-            call 2-plan-tasks
-            call 4-pull-history
-            call 0-update-status
+    4-execute-tasks
+        loop over todo.csv
+            call pull-history
+        update todo.csv
 
     5-plan-missing-quotes
         1. Input Parameter: Date

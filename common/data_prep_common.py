@@ -10,16 +10,23 @@ from pathlib import Path
 import os
 
 REFERENCE_DIR = "../data/reference/"
+DATA_DIR = "../data/quotes/"
+TODO_FILE = "../data/status/todo.csv"
+config_json = "../data/reference/stock-list.json"
+FILE_GROUPS=["../data/raw/AAPL/?q-BID_ASK-*csv", "../data/raw/AAPL/?q-TRADES-*csv"]
+
+StrikeRange = 2
+ExpiryOut = 3
 
 def tn():
     return datetime.datetime.now().strftime("%H:%M:%S") + ": "
 
-ib = IB()
+global_ib = IB()
 def getIB():
-    global ib
-    if not ib.isConnected():
-        ib.connect('127.0.0.1', 7496, clientId=1)
-    return ib
+    global global_ib
+    if not global_ib.isConnected():
+        global_ib.connect('127.0.0.1', 7496, clientId=1)
+    return global_ib
 
 
 def getConfig(config_json: str):
@@ -162,7 +169,29 @@ def getOptionlist(contract: Contract, pDate: str, min, max, StrikeRange: int = 2
     exp2 = df.loc[df['lastTradeDateOrContractMonth'] == expiry[idx+1]]
     exp3 = df.loc[df['lastTradeDateOrContractMonth'] == expiry[idx+2]]
     df = pd.concat([exp1, exp2, exp3], axis=0, ignore_index=True)
+    df['secType'] = 'OPT'
     return df
+
+
+def getYear(p1):
+    if type(p1) == datetime.datetime:
+        p1 = p1.strftime("%Y%m%d")
+    d = p1.replace(" ", "").replace("-", "")
+    return d[0:4]
+
+
+def getMonth(p1):
+    if type(p1) == datetime.datetime:
+        p1 = p1.strftime("%Y%m%d")
+    d = p1.replace(" ", "").replace("-", "")
+    return d[4:6]
+
+
+def getDay(p1):
+    if type(p1) == datetime.datetime:
+        p1 = p1.strftime("%Y%m%d")
+    d = p1.replace(" ", "").replace("-", "")
+    return d[6:8]
 
 """
 Creates contract object from parameter dictionary 
@@ -174,33 +203,38 @@ def getContract(data: dict):
                     conId=data["conId"], includeExpired=False)
 
 
-t930 = datetime.time(9, 30, 0)
-t1600 = datetime.time(16, 0, 0)
-t1630 = datetime.time(16, 30, 0)
+def check_pull_historical_quote_to_file(pDate, contract):
+    for sq_type in ['BID_ASK', 'TRADES']:
+        if contract.secType == "STK":
+            sym = contract.symbol.replace(" ", "")
+        else:
+            sym = contract.localSymbol.replace(" ", "")
+        fn = DATA_DIR + getYear(pDate) + "/" + getMonth(pDate) + "/" + getDay(pDate) + "/sq-" + sq_type + "-" + sym + ".csv"
+        if os.path.exists(fn):
+            df = pd.read_csv(fn, index_col=None)
+        else:
+            ib = getIB()
+            bars = ib.reqHistoricalData(contract, endDateTime=pDate + " 16:00:00",
+                                        durationStr='5 D', barSizeSetting='1 min',
+                                        whatToShow=sq_type, useRTH=True)
+            if len(bars) > 0:
+                df = util.df(bars)
+                df['symbol'] = contract.symbol
+                df['localSymbol'] = contract.localSymbol
+                df['conId'] = contract.conId
+                # get unique dates in df
 
-def pull_historical_data(ib, contract, endDateTime = "", durationStr: str = "1 D",
-                         barSizeSetting: str = "1 M", whatToShow: str = "TRADES"):
-    barsList=[]
-    bars = None
-    print(tn(), "      pull_and_save_data:", whatToShow, contract, durationStr, barSizeSetting, endDateTime)
-
-    try:
-        bars = ib.reqHistoricalData(contract, endDateTime=endDateTime, durationStr=durationStr,
-                                    barSizeSetting=barSizeSetting, whatToShow=whatToShow, useRTH=True, formatDate=1)
-    except Exception as e:
-        print(e)
-        exit(1)
-
-    if not bars:
-        print(tn(), "empty data returned for endDateTime", endDateTime)
-        print(tn(), "exiting.")
-        return
-
-    for x in bars:
-        if t930 <= x.date.time() <= t1600:
-            barsList.append(x)
-
-    return barsList
+                dates = df['date'][::].astype(str).str.slice(stop=10).unique()
+                # for each date, filter rows & save
+                for date_ in dates:
+                    fn2 = DATA_DIR + getYear(date_) + "/" + getMonth(date_) + "/" + getDay(date_) + "/sq-" + sq_type + "-" + sym + ".csv"
+                    Path(fn2).parent.mkdir(parents=True, exist_ok=True)
+                    df_ = df.loc[df['date'][::].astype(str).str.slice(stop=10) == date_]
+                    df_.to_csv(fn2, index=False)
+            else:
+                df = pd.DataFrame()
+                break
+    return df
 
 
 def getDateObj(p1):

@@ -6,9 +6,6 @@ from ib_insync import *
 import common.data_prep_common as dc
 import pandas as pd
 
-REFERENCE_DIR = "../data/reference/"
-config_json = REFERENCE_DIR + "stock-list.json"
-
 '''
         1. for a list of stocks in the stock-list.json
         2. pull current list of options
@@ -19,14 +16,12 @@ config_json = REFERENCE_DIR + "stock-list.json"
 '''
 
 def pull_option_list():
-    ib = dc.getIB()
-    configStocks = dc.getConfig(config_json)
-    stocks = configStocks.get("stocks")
+    stocks = dc.getConfig(dc.config_json).get("stocks")
     # 1. for a list of stocks in the stock-list.json
     for stock in stocks:
         contract = dc.getContract(stock['contract'])
         symbol = contract.symbol.replace(" ", "")[0:4]
-        option_list_file = REFERENCE_DIR + "option-list-"+symbol+".csv"
+        option_list_file = dc.REFERENCE_DIR + "option-list-"+symbol+".csv"
         if contract.secType == "STK":
             df = pd.DataFrame()
 
@@ -38,6 +33,7 @@ def pull_option_list():
             # 2. pull current list of options
             contract.secType = "OPT"
             contract.conId = 0
+            ib = dc.getIB()
             res = ib.reqContractDetails(contract)
 
             # 4. add new options
@@ -56,7 +52,7 @@ def pull_option_list():
             df.to_csv(option_list_file, index=False)
             print(dc.tn() + f"No dup shape:", df.shape)
 
+
 if __name__ == "__main__":
     pull_option_list()
-
-os.system("say 1 pull option list done")
+    print(dc.tn() + "1-pull-option-list done!")
