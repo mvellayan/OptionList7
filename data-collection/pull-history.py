@@ -2,7 +2,11 @@ import datetime
 import os
 import time
 from ib_insync import *
-import common.data_prep_common as dc
+import common.ol_const as olc
+import common.ol_data as old
+import common.ol_ib as oli
+import common.ol_util as olu
+
 
 # -- do not use, only 1 rec/day: whatToShow = 'HISTORICAL_VOLATILITY'
 # https://interactivebrokers.github.io/tws-api/historical_bars.html

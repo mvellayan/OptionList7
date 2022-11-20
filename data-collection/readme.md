@@ -4,7 +4,7 @@
     data/
         reference/
             - stock-list.cvs -- list of stocks to manage
-            - option-list.csv -- list of options to manage
+            - option-list-AAPL.csv -- list of options to manage
         status/
             - status.csv: conId, date, count
             - todo.csv: conId, date, durationStr [1 D, 5 D, 30 D, etc]

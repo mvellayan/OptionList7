@@ -1,11 +1,8 @@
-import datetime
-import os
-import time
-from pprint import pprint
 from ib_insync import *
-import common.data_prep_common as dc
 import pandas as pd
-import pathlib
+import common.ol_const as olc
+import common.ol_ib as oli
+import common.ol_util as olu
 
 """
    4-execute-tasks
@@ -15,31 +12,32 @@ import pathlib
     update todo.csv
 """
 
+
 def execute_todos(todo_file):
-
-    # 1. Read to "status/todo.csv" file
-    if not os.path.exists(todo_file):
-        print(dc.tn(), "no todo file: ", todo_file)
-        exit(1)
-
     todo_csv = pd.read_csv(todo_file, index_col=None)
     todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
+    todo_csv.sort_values(by=['pull_date', 'localSymbol', 'symbol'], ascending=False, inplace=True)
 
     ind = 0
     while ind < todo_csv.shape[0]:
         if todo_csv.iloc[ind]['status'] > '4':
             ind += 1
             continue
-        print(dc.tn() + f"  processing: {ind}/{todo_csv.shape[0]}: {todo_csv.iloc[ind]['localSymbol']}")
+        print(
+            olu.tn() + f"  processing: {ind}/{todo_csv.shape[0]}: {todo_csv.iloc[ind]['pull_date']} {todo_csv.iloc[ind]['localSymbol']}/{todo_csv.iloc[ind]['symbol']}")
         c = Contract(conId=todo_csv.iloc[ind]['conId'],
                      secType=todo_csv.iloc[ind]['secType'],
                      exchange=todo_csv.iloc[ind]['exchange'],
                      symbol=todo_csv.iloc[ind]['symbol'],
                      localSymbol=todo_csv.iloc[ind]['localSymbol'],
                      currency='USD')
-        df = dc.check_pull_historical_quote_to_file(str(todo_csv.iloc[ind]['pull_date']), c)
-        if df.shape[0] == 0:
-            todo_csv.at[ind, 'status'] = '9-error'
+        df = oli.check_pull_historical_quote_to_file(str(todo_csv.iloc[ind]['pull_date']), c)
+        if df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '1-todo':
+            todo_csv.at[ind, 'status'] = '2-todo'
+        elif df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '2-todo':
+            todo_csv.at[ind, 'status'] = '3-todo'
+        elif df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '3-todo':
+            todo_csv.at[ind, 'status'] = '9-error, after 3 tries'
         else:
             todo_csv.at[ind, 'status'] = '5-done'
         todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
@@ -49,5 +47,5 @@ def execute_todos(todo_file):
 
 
 if __name__ == "__main__":
-    execute_todos(dc.TODO_FILE)
-    print(dc.tn() + "4-execute-tasks done!")
+    execute_todos(olc.todo_file)
+    print(olu.tn() + "4-execute-tasks done!")

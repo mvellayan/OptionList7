@@ -1,10 +1,9 @@
-import datetime
 import os
-import time
-from pprint import pprint
-from ib_insync import *
-import common.data_prep_common as dc
 import pandas as pd
+
+import common.ol_const as olc
+import common.ol_ib as oli
+import common.ol_util as olu
 
 '''
         1. for a list of stocks in the stock-list.json
@@ -15,44 +14,45 @@ import pandas as pd
         6. saves back to data/reference/option-list-AAPL.csv
 '''
 
+
 def pull_option_list():
-    stocks = dc.getConfig(dc.config_json).get("stocks")
+    stocks = olu.getConfig(olc.config_json).get("stocks")
     # 1. for a list of stocks in the stock-list.json
     for stock in stocks:
-        contract = dc.getContract(stock['contract'])
+        contract = oli.getContract(stock['contract'])
         symbol = contract.symbol.replace(" ", "")[0:4]
-        option_list_file = dc.REFERENCE_DIR + "option-list-"+symbol+".csv"
+        option_list_file = olc.REFERENCE_DIR + "option-list-" + symbol + ".csv"
         if contract.secType == "STK":
             df = pd.DataFrame()
 
             # 3. loads data/reference/option-list-{symbol}.csv
             if os.path.exists(option_list_file):
                 df = pd.read_csv(option_list_file, index_col=None)
-                print(dc.tn() + f"OptionList file exists. {option_list_file}  Loaded shape:", df.shape)
+                print(olu.tn() + f"OptionList file exists. {option_list_file}  Loaded shape:", df.shape)
 
             # 2. pull current list of options
             contract.secType = "OPT"
             contract.conId = 0
-            ib = dc.getIB()
+            ib = oli.getIB()
             res = ib.reqContractDetails(contract)
 
             # 4. add new options
             for row in res:
-                new_df = pd.DataFrame([row.contract.__dict__ ])
-                new_df.drop(['secType', 'primaryExchange', 'currency','tradingClass',
+                new_df = pd.DataFrame([row.contract.__dict__])
+                new_df.drop(['secType', 'primaryExchange', 'currency', 'tradingClass',
                              'includeExpired', 'secIdType', 'secId',
                              'comboLegsDescrip', 'comboLegs', 'deltaNeutralContract'], axis=1, inplace=True)
                 df = pd.concat([df, new_df], axis=0, ignore_index=True)
 
             # 5. dedups based on conid
-            print(dc.tn() + f"Superset shape:", df.shape)
+            print(olu.tn() + f"Superset shape:", df.shape)
             df.drop_duplicates(subset=['conId'], keep='first', inplace=True)
 
             #  6. saves back to data/reference/option-list-AAPL.csv
             df.to_csv(option_list_file, index=False)
-            print(dc.tn() + f"No dup shape:", df.shape)
+            print(olu.tn() + f"No dup shape:", df.shape)
 
 
 if __name__ == "__main__":
     pull_option_list()
-    print(dc.tn() + "1-pull-option-list done!")
+    print(olu.tn() + "1-pull-option-list done!")
