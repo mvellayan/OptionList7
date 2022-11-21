@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import common.ol_const as olc
-import common.ol_data as old
+import common.ol_pd as olpd
 import common.ol_ib as oli
 import common.ol_util as olu
 
@@ -27,19 +27,19 @@ def project_join(date_, stock):
         date_) + "/sq-TRADES-VIX.csv"
     if not exists(dirSp): return
 
-    dfVIX = old.load_data(dirSp)
+    dfVIX = olpd.load_data(dirSp)
     dfVIX.drop_duplicates(subset=['date'], keep='first', inplace=True)
 
     #
     # load TRADES
     dirSp = olc.DATA_DIR + olu.getYear(date_) + "/" + olu.getMonth(date_) + "/" + olu.getDay(date_) + "/sq-TRADES" + "-*.csv"
-    dfTrades = old.load_data(dirSp)
+    dfTrades = olpd.load_data(dirSp)
     dfTrades.drop_duplicates(subset=['date', 'conId'], keep='first', inplace=True)
 
     #
     # load BID_ASK
     dirSp = olc.DATA_DIR + olu.getYear(date_) + "/" + olu.getMonth(date_) + "/" + olu.getDay(date_) + "/sq-BID_ASK" + "-*.csv"
-    dfBA = old.load_data(dirSp)
+    dfBA = olpd.load_data(dirSp)
     dfBA.drop_duplicates(subset=['date', 'conId'], keep='first', inplace=True)
 
     #

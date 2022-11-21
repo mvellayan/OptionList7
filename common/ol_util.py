@@ -1,16 +1,10 @@
-import glob
 import datetime
 
-import pandas as pd
 from pprint import pprint
 import json
 from os.path import exists
 from ib_insync import *
 from pathlib import Path
-import os
-import common.ol_const as olc
-import common.ol_data as old
-import common.ol_ib as oli
 
 def tn():
     return datetime.datetime.now().strftime("%H:%M:%S") + ": "

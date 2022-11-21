@@ -5,7 +5,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import common.ol_const as olc
-import common.ol_data as old
+import common.ol_pd as olpd
+import common.ol_mysql as olsql
 import common.ol_ib as oli
 import common.ol_util as olu
 import sqlalchemy
@@ -28,21 +29,21 @@ def project_join(date_, stock):
         date_) + "/sq-TRADES-VIX.csv"
     if not exists(dirSp): return
 
-    dfVIX = old.load_data(dirSp)
+    dfVIX = olpd.load_data(dirSp)
     dfVIX.drop_duplicates(subset=['date'], keep='first', inplace=True)
 
     #
     # load TRADES
     dirSp = olc.DATA_DIR + olu.getYear(date_) + "/" + olu.getMonth(date_) + "/" + olu.getDay(
         date_) + "/sq-TRADES" + "-*.csv"
-    dfTrades = old.load_data(dirSp)
+    dfTrades = olpd.load_data(dirSp)
     dfTrades.drop_duplicates(subset=['date', 'conId'], keep='first', inplace=True)
 
     #
     # load BID_ASK
     dirSp = olc.DATA_DIR + olu.getYear(date_) + "/" + olu.getMonth(date_) + "/" + olu.getDay(
         date_) + "/sq-BID_ASK" + "-*.csv"
-    dfBA = old.load_data(dirSp)
+    dfBA = olpd.load_data(dirSp)
     dfBA.drop_duplicates(subset=['date', 'conId'], keep='first', inplace=True)
 
     #
@@ -91,37 +92,30 @@ def project_join(date_, stock):
 def loadToDo():
     todo_csv = pd.read_csv(olc.todo_file, index_col=None)
     todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
-    # connection = pymysql.connect(host=olc.database_host,                           user=olc.database_user,
-    #                             password=olc.database_password,
-    #                             db=olc.database_schema)
-
-    # https://towardsdatascience.com/work-with-sql-in-python-using-sqlalchemy-and-pandas-cd7693def708
-    connect_string = "mysql+pymysql://" + olc.database_user + ":" + olc.database_password \
-                     + "@" + olc.database_host + "/" + olc.database_schema +"?charset=utf8mb4"
-    engine = sqlalchemy.create_engine(connect_string, echo=True)
-
-    todo_csv.to_sql(name="tasks_tmp", con=engine, schema=olc.database_schema, if_exists='append', index=False)
+    todo_csv.to_sql(name="tasks_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
     insertSQL = """
         INSERT ignore INTO `ol7`.`tasks`(`con_id`, `symbol`, `last_trade_date`, `strike`, `right`, 
         `multiplier`, `exchange`,`secType`, `status`, `pull_date`)
             SELECT `conId`, ifnull(`localSymbol`,`symbol`) symbol, `lastTradeDateOrContractMonth`, `strike`, `right`, 
             `multiplier`, `exchange`, `secType`, `status`, `pull_date` FROM `ol7`.`tasks_tmp`;
     """
-
-    with engine.connect().execution_options(autocommit=True) as conn:
+    with olsql.getEngine().connect().execution_options(autocommit=True) as conn:
         r = conn.execute(text(insertSQL))
         d = conn.execute(text("DROP TABLE `ol7`.`tasks_tmp`;"))
+
     # todo_csv.to_sql(name="tasks", con=connection, schema=olc.database_schema, if_exists='append', index=False)
-    print("r=", r.rowcount)
-    print("d=", d.rowcount)
+    print(olu.tn() + "Inserted TASKS Rows =", r.rowcount)
+
+
+def loadOptionList():
+    todo_csv = pd.read_csv(olc.todo_file, index_col=None)
+
 
 if __name__ == "__main__":
     print(olu.tn() + "2p-load-to-mysql Starting")
 
-    # 1. reload status
-    #  - delete all old rows
-    #  load ./data/status/todo.csv
     loadToDo()
+    loadOptionList()
 
     # 2. load projection
     #  - for

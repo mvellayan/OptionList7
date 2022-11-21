@@ -10,7 +10,6 @@ from pathlib import Path
 import os
 
 import common.ol_const as olc
-import common.ol_data as old
 import common.ol_util as olu
 
 global_ib = IB()
