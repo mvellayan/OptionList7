@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
     #build list of dates
     todo_dates = pd.read_csv(olc.working_days, index_col=None)
-    lp = todo_dates.loc[(todo_dates['working_date'] > 20220500) & (todo_dates['working_date'] < 20221119)]
+    lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] < olc.STOCK_PULL_END_DATE)]
     lp = lp.sort_values('working_date', ascending=False)
 
     #get stock

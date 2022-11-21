@@ -7,8 +7,9 @@ from ib_insync import *
 import common.ol_const as olc
 
 
-def load_data(file_str: str, max_files: int = 999):
+def load_data(file_str: str):
     # Get CSV files list from a folder
+    """
     csv_files = []
     for path in file_str:
         csv_files.extend(glob.glob(path))
@@ -21,14 +22,10 @@ def load_data(file_str: str, max_files: int = 999):
     # This creates a list of dataframes
     # df_list = (pd.read_csv(file) for file in csv_files)
     # df = pd.concat(df_list, ignore_index=True)
+    """
     df = pd.DataFrame()
-    for file in csv_files:
+    for file in glob.glob(file_str):
         df2 = pd.read_csv(file)
-        if "BID_ASK" in file:
-            df2['quoteType'] = "BID_ASK"
-        elif "TRADES" in file:
-            df2['quoteType'] = "TRADES"
-
         df = pd.concat([df, df2], ignore_index=True)
 
     return df
