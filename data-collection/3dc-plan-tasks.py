@@ -21,7 +21,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 """
 
 
-def plan_tasks(pDate: str):
+def plan_tasks(pDate: str, stock):
     if type(pDate) in [int]:
         pDateInt = pDate
         pDate = str(round(pDate))
@@ -29,8 +29,7 @@ def plan_tasks(pDate: str):
         pDateInt = int(pDate)
 
     print(olu.tn() + f"  creating tasks for {pDate}")
-    configStocks = olu.getConfig(olc.config_json)
-    stock = oli.getContract(configStocks.get("stocks")[0]['contract'])
+
     df2 = oli.check_pull_historical_quote_to_file(pDate, stock)
     min_, max_ = df2['open'].agg(['min', 'max'])
 
@@ -69,8 +68,18 @@ def plan_tasks(pDate: str):
 
 
 if __name__ == "__main__":
+    print(olu.tn() + "3-plan-tasks Starting!")
+
+    #build list of dates
     todo_dates = pd.read_csv(olc.working_days, index_col=None)
     lp = todo_dates.loc[(todo_dates['working_date'] > 20220500) & (todo_dates['working_date'] < 20221119)]
     lp = lp.sort_values('working_date', ascending=False)
-    lp['working_date'].apply(plan_tasks)
+
+    #get stock
+    configStocks = olu.getConfig(olc.config_json)
+    stock = oli.getContract(configStocks.get("stocks")[0]['contract'])
+
+    #Loop for each record
+    lp['working_date'].apply(plan_tasks, stock=stock)
+
     print(olu.tn() + "3-plan-tasks done!")
