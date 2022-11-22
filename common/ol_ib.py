@@ -29,7 +29,8 @@ def getContract(data: dict):
                     conId=data["conId"], includeExpired=False)
 
 
-def check_pull_historical_quote_to_file(pDate, contract):
+def check_pull_historical_quote_to_file(sDate:str, contract):
+    if type(sDate) != str: 1/0
     for sq_type in ['BID_ASK', 'TRADES']:
 
         # Vix does not have BID_ASK, only TRADES
@@ -41,12 +42,12 @@ def check_pull_historical_quote_to_file(pDate, contract):
         else:
             sym = contract.localSymbol.replace(" ", "")
 
-        fn = olc.DATA_DIR + olu.getYear(pDate) + "/" + olu.getMonth(pDate) + "/" + olu.getDay(pDate) + "/sq-" + sq_type + "-" + sym + ".csv"
+        fn = olc.DATA_DIR + olu.getYear(sDate) + "/" + olu.getMonth(sDate) + "/" + olu.getDay(sDate) + "/sq-" + sq_type + "-" + sym + ".csv"
         if os.path.exists(fn):
             df = pd.read_csv(fn, index_col=None)
         else:
             ib = getIB()
-            bars = ib.reqHistoricalData(contract, endDateTime=pDate + " 16:00:00",
+            bars = ib.reqHistoricalData(contract, endDateTime=sDate + " 16:00:00",
                                         durationStr='5 D', barSizeSetting='1 min',
                                         whatToShow=sq_type, useRTH=True)
             if len(bars) > 0:

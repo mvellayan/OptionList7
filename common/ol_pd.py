@@ -59,7 +59,7 @@ def dedup(df, expected_rows_per_day: int):
     return df, df2
 
 
-def getOptionlist(contract: Contract, pDate: str, min_, max_, strikeRange: int = 2, expiryOut: int = 3):
+def getOptionlist(contract: Contract, sDate: str, min_, max_, strikeRange: int = 2, expiryOut: int = 3):
     symbol = contract.symbol.replace(" ", "")[0:4]
     option_list_file = olc.REFERENCE_DIR + "option-list-" + symbol + ".csv"
     # read whole file
@@ -85,12 +85,14 @@ def getOptionlist(contract: Contract, pDate: str, min_, max_, strikeRange: int =
     expiry = df['lastTradeDateOrContractMonth'].unique()
     expiry.sort()
     idx = -1
-    dn = datetime.datetime.strptime(pDate, '%Y%m%d')
-    friday = dn + datetime.timedelta((4 - dn.weekday()) % 7)
+    dDate = datetime.datetime.strptime(sDate, '%Y%m%d')
+    friday = dDate + datetime.timedelta((4 - dDate.weekday()) % 7)
     for x in range(len(expiry)):
-        if idx == -1 and expiry[x] == friday.strftime('%Y%m%d'):
+        if idx == -1 and str(expiry[x]) == friday.strftime('%Y%m%d'):
             idx = x
             break
+    if idx == -1:  # expiry date found, return empty df
+        return pd.DataFrame()
     # TODO loop around expiryOut instead of hard coded 3
     exp1 = df.loc[df['lastTradeDateOrContractMonth'] == expiry[idx]]
     exp2 = df.loc[df['lastTradeDateOrContractMonth'] == expiry[idx + 1]]

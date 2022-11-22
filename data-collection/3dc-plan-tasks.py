@@ -21,19 +21,19 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 """
 
 
-def plan_tasks(pDate: str, stock):
-    if type(pDate) in [int]:
-        pDateInt = pDate
-        pDate = str(round(pDate))
-    else:
-        pDateInt = int(pDate)
+def plan_tasks(iDate: int, stock):
+    sDate = str(iDate)
 
-    print(olu.tn() + f"  creating tasks for {pDate}")
-
-    df2 = oli.check_pull_historical_quote_to_file(pDate, stock)
+    # read current quotes to figure out min/max trading range
+    df2 = oli.check_pull_historical_quote_to_file(sDate, stock)
     min_, max_ = df2['open'].agg(['min', 'max'])
 
-    optionList = olpd.getOptionlist(stock, pDate, min_, max_, olc.StrikeRange, olc.ExpiryOut)
+    # build list of options to pull
+    optionList = olpd.getOptionlist(stock, sDate, min_, max_, olc.StrikeRange, olc.ExpiryOut)
+    # if there are no rows, return!!
+    if optionList.shape[0] == 0:
+        print(f"No options defined for date: {sDate} trading range: {min_} - {max_}")
+        return
     optionList = optionList.append(
         {'conId': stock.conId, 'symbol': stock.symbol, 'exchange': stock.exchange, 'secType': stock.secType},
         ignore_index=True)
@@ -41,8 +41,9 @@ def plan_tasks(pDate: str, stock):
                                    ignore_index=True)
     optionList['status'] = '1-todo'
 
+    # x
     working_days = pd.read_csv(olc.market_days, index_col=None)
-    working_days = working_days.loc[working_days['working_date'] <= pDateInt]
+    working_days = working_days.loc[working_days['working_date'] <= iDate]
     working_days = working_days.sort_values(by=['working_date'], ascending=False)
     working_days = working_days.reset_index(drop=True)
 
@@ -64,7 +65,7 @@ def plan_tasks(pDate: str, stock):
 
     #  Saves back to todo.csv file
     todo_csv.to_csv(olc.todo_file, index=False)
-    print(olu.tn() + f"    adding tasks {optionList.shape} new total {todo_csv.shape}")
+    print(olu.tn() + f"  Creating tasks for {pDate}.  Adding {optionList.shape} new total {todo_csv.shape}")
 
 
 if __name__ == "__main__":
@@ -72,7 +73,9 @@ if __name__ == "__main__":
 
     #build list of dates
     todo_dates = pd.read_csv(olc.market_days, index_col=None)
-    lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] < olc.STOCK_PULL_END_DATE)]
+    todo_dates = todo_dates.astype({"working_date": int, "working_hour": float})
+
+    lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] <= olc.STOCK_PULL_END_DATE)]
     lp = lp.sort_values('working_date', ascending=False)
 
     #get stock
