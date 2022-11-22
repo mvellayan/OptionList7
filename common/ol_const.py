@@ -6,6 +6,8 @@ PROJECTION_DIR = "../data/projection/"
 todo_file = "../data/status/todo.csv"
 stock_list_json = "../data/reference/stock-list.json"
 option_list_csv = "../data/reference/option-list-*.csv"
+model_generator_json = "../model/ref-data/model-generator.json"
+model_list_csv = "../model/ref-data/model-list.csv"
 market_days = "../data/reference/market-days.csv"
 FILE_GROUPS = ["../data/raw/AAPL/?q-BID_ASK-*csv", "../data/raw/AAPL/?q-TRADES-*csv"]
 

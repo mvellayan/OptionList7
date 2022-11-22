@@ -20,7 +20,6 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
         5. Output to status/todo.csv file
 """
 
-
 def plan_tasks(iDate: int, stock):
     sDate = str(iDate)
 
@@ -41,27 +40,32 @@ def plan_tasks(iDate: int, stock):
                                    ignore_index=True)
     optionList['status'] = '1-todo'
 
-    # x
+    # build a list of working days to pull quotes
+    # less than equal to parameter date
     working_days = pd.read_csv(olc.market_days, index_col=None)
     working_days = working_days.loc[working_days['working_date'] <= iDate]
     working_days = working_days.sort_values(by=['working_date'], ascending=False)
     working_days = working_days.reset_index(drop=True)
 
-    # 5. Output to "status/todo.csv" file
+    # read previous list of todo tasks
     if os.path.exists(olc.todo_file):
         todo_csv = pd.read_csv(olc.todo_file, index_col=None)
     else:
         todo_csv = pd.DataFrame()
 
+    # pull for past 15 days
     for idx in range(15):
-        pDate = working_days.loc[idx]['working_date']
-        pDate = str(round(pDate))
-        current_list = optionList
+        current_list = optionList.copy()
+        pDate = str(round(working_days.loc[idx]['working_date']))
         current_list["pull_date"] = pDate
         todo_csv = pd.concat([current_list, todo_csv], axis=0, ignore_index=True)
 
-    # todo_csv.drop_duplicates(subset=['conId'], keep='first', inplace=True)
-    todo_csv = todo_csv.sort_values('status', ascending=False).drop_duplicates(['conId', 'pull_date']).sort_index()
+    todo_csv['conId'] = pd.to_numeric(todo_csv['conId'], downcast='integer')
+    todo_csv['pull_date'] = pd.to_numeric(todo_csv['pull_date'], downcast='integer')
+    todo_csv = todo_csv.sort_values(['conId', 'pull_date', 'status'], ascending=False)
+    todo_csv.drop_duplicates(subset=['conId', 'pull_date', 'status'], keep='first', inplace=True)
+    todo_csv = todo_csv.sort_values(['pull_date', 'conId', 'status'], ascending=False)
+    #todo_csv = todo_csv.sort_values('status', ascending=False).drop_duplicates(['conId', 'pull_date']).sort_index()
 
     #  Saves back to todo.csv file
     todo_csv.to_csv(olc.todo_file, index=False)
