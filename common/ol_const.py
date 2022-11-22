@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, time
 
 REFERENCE_DIR = "../data/reference/"
 DATA_DIR = "../data/quotes/"
@@ -12,7 +12,13 @@ market_days = "../data/reference/market-days.csv"
 FILE_GROUPS = ["../data/raw/AAPL/?q-BID_ASK-*csv", "../data/raw/AAPL/?q-TRADES-*csv"]
 
 STOCK_PULL_START_DATE: int = 20220500
-STOCK_PULL_END_DATE: int = int(datetime.now().strftime('%Y%m%d'))
+
+today = datetime.now().today()
+yesterday = today - timedelta(days=1)
+if datetime.now().time() > time(16, 0, 0):
+    STOCK_PULL_END_DATE: int = int(today.strftime('%Y%m%d'))
+else:
+    STOCK_PULL_END_DATE: int = int(yesterday.strftime('%Y%m%d'))
 
 # how many strike prices below and above to pull
 StrikeRange = 2
