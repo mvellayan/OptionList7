@@ -1,4 +1,5 @@
 import datetime
+import glob
 from os.path import exists
 from pathlib import Path
 
@@ -33,7 +34,15 @@ def project_join(date_, stock):
     #
     # load TRADES
     dirSp = olc.DATA_DIR + olu.getYear(date_) + "/" + olu.getMonth(date_) + "/" + olu.getDay(date_) + "/sq-TRADES" + "-*.csv"
-    dfTrades = olpd.load_data(dirSp)
+    dfTrades = pd.DataFrame()
+    for file in glob.glob(dirSp):
+        df2 = pd.read_csv(file)
+        df2 = df2.sort_values('date', ascending=True)
+        df2['trade_average_delta_30'] = df2['average'].rolling(window=30, min_periods=30).agg({'trade_average_delta_30': find_delta})
+        df2['barCount_sum_30'] = df2['barCount'].rolling(window=30, min_periods=30).sum()
+        dfTrades = pd.concat([dfTrades, df2], ignore_index=True)
+
+
     dfTrades.drop_duplicates(subset=['date', 'conId'], keep='first', inplace=True)
 
     #
@@ -46,7 +55,7 @@ def project_join(date_, stock):
     # Process TRADES
     dfTrades['average'] = dfTrades['average'].round(decimals=3)
     # need this column to compute average of averages
-    dfTrades = dfTrades[['date', 'symbol', 'localSymbol', 'conId', 'low', 'average', 'high',  'volume', 'barCount']]
+    dfTrades = dfTrades[['date', 'symbol', 'localSymbol', 'conId', 'low', 'average', 'trade_average_delta_30', 'high',  'volume', 'barCount', 'barCount_sum_30']]
 
     # dfTrades['symbol'] = dfTrades.apply(lambda x: x.symbol if x.localSymbol == np.nan else x.localSymbol, axis=1)
     # dfTrades['symbol'] = dfTrades.apply(lambda x: findSymbol(x))
@@ -91,12 +100,12 @@ if __name__ == "__main__":
     print(olu.tn() + "1p-projection Starting")
 
     #get dates
-    todo_dates = pd.read_csv(olc.working_days, index_col=None)
+    todo_dates = pd.read_csv(olc.market_days, index_col=None)
     lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] < olc.STOCK_PULL_END_DATE)]
     lp = lp.sort_values('working_date', ascending=False)
 
     #get stock
-    configStocks = olu.getConfig(olc.config_json)
+    configStocks = olu.getConfig(olc.stock_list_json)
     stock = oli.getContract(configStocks.get("stocks")[0]['contract'])
 
     #loop for each date

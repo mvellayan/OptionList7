@@ -90,11 +90,11 @@ def project_join(date_, stock):
 
 
 def loadToDo():
-    todo_csv = pd.read_csv(olc.todo_file, index_col=None)
+    todo_csv = olpd.load_data(olc.todo_file)
     todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
-    todo_csv.to_sql(name="tasks_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
+    todo_csv.to_sql(name="task_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
     insertSQL = """
-        INSERT ignore INTO `ol7`.`tasks`(`con_id`, `symbol`, `last_trade_date`, `strike`, `right`, 
+        INSERT IGNORE INTO `ol7`.`task`(`con_id`, `symbol`, `last_trade_date`, `strike`, `right`, 
         `multiplier`, `exchange`,`secType`, `status`, `pull_date`)
             SELECT `conId`, ifnull(`localSymbol`,`symbol`) symbol, `lastTradeDateOrContractMonth`, `strike`, `right`, 
             `multiplier`, `exchange`, `secType`, `status`, `pull_date` FROM `ol7`.`tasks_tmp`;
@@ -103,21 +103,58 @@ def loadToDo():
         r = conn.execute(text(insertSQL))
         d = conn.execute(text("DROP TABLE `ol7`.`tasks_tmp`;"))
 
-    # todo_csv.to_sql(name="tasks", con=connection, schema=olc.database_schema, if_exists='append', index=False)
-    print(olu.tn() + "Inserted TASKS Rows =", r.rowcount)
+    print(olu.tn() + "Inserted TASK Rows =", r.rowcount)
 
 
 def loadOptionList():
-    todo_csv = pd.read_csv(olc.todo_file, index_col=None)
+    ol = olpd.load_data(olc.option_list_csv)
+    ol.to_sql(name="option_list_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
+    insertSQL = """
+        INSERT IGNORE INTO `ol7`.`option_list` (`con_id`, `symbol`, `last_trade_date`, `strike`, `right`,
+        `multiplier`, `exchange`,	`localSymbol`)
+            SELECT `conId`, `symbol`, `lastTradeDateOrContractMonth`, `strike`, `right`, 
+            `multiplier`, `exchange`, `localSymbol` FROM `ol7`.`option_list_tmp`;
+    """
+    with olsql.getEngine().connect().execution_options(autocommit=True) as conn:
+        r = conn.execute(text(insertSQL))
+        d = conn.execute(text("DROP TABLE `ol7`.`option_list_tmp`;"))
+
+    print(olu.tn() + "Inserted OPTION_LIST Rows =", r.rowcount)
+
+
+def loadProjectedQuotes():
+    ol = olpd.load_data(olc.PROJECTION_DIR + "/**/*.csv",  recursive=True)
+    ol.to_sql(name="option_quote_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
+    insertSQLOptions = """
+    INSERT IGNORE INTO ol7.option_quote(date, con_id, trade_low, trade_average, trade_average_delta_30, trade_high, trade_volume,
+                     trade_barcount, barcount_sum_30, bid_min, bid_avg, ask_avg, ask_max)
+    SELECT date, `conId`, trade_low, trade_average, trade_average_delta_30, trade_high, trade_volume, 
+                    `trade_barCount`, `barCount_sum_30`, bid_min, bid_avg, ask_avg, ask_max
+    FROM ol7.option_quote_tmp where `localSymbol` is not null;
+    """
+
+    insertSQLStocks = """
+    INSERT IGNORE INTO ol7.stock_quote (date, con_id, trade_low, trade_average, trade_average_delta_30, trade_high, trade_volume, 
+                trade_barcount,barcount_sum_30, bid_min, bid_avg, ask_avg, ask_max)
+    SELECT date, `conId`, trade_low, trade_average, trade_average_delta_30, trade_high, trade_volume, 
+                `trade_barCount`, `barCount_sum_30`, bid_min, bid_avg, ask_avg, ask_max 
+    FROM ol7.option_quote_tmp  where symbol='AAPL'  and `localSymbol` is null;
+    """
+
+    with olsql.getEngine().connect().execution_options(autocommit=True) as conn:
+        r = conn.execute(text(insertSQLOptions))
+        r = conn.execute(text(insertSQLStocks))
+        d = conn.execute(text("DROP TABLE `ol7`.`option_quote_tmp`;"))
+
+    # print(olu.tn() + "Inserted OPTION_LIST Rows =", r.rowcount)
+
 
 
 if __name__ == "__main__":
     print(olu.tn() + "2p-load-to-mysql Starting")
 
-    loadToDo()
-    loadOptionList()
-
-    # 2. load projection
-    #  - for
+    #loadToDo()
+    #loadOptionList()
+    loadProjectedQuotes()
 
     print(olu.tn() + "2p-load-to-mysql done!")

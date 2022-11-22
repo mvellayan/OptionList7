@@ -16,7 +16,7 @@ import common.ol_util as olu
 
 
 def pull_option_list():
-    stocks = olu.getConfig(olc.config_json).get("stocks")
+    stocks = olu.getConfig(olc.stock_list_json).get("stocks")
     # 1. for a list of stocks in the stock-list.json
     for stock in stocks:
         contract = oli.getContract(stock['contract'])

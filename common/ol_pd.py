@@ -7,7 +7,7 @@ from ib_insync import *
 import common.ol_const as olc
 
 
-def load_data(file_str: str):
+def load_data(file_str: str,  recursive=False):
     # Get CSV files list from a folder
     """
     csv_files = []
@@ -24,7 +24,7 @@ def load_data(file_str: str):
     # df = pd.concat(df_list, ignore_index=True)
     """
     df = pd.DataFrame()
-    for file in glob.glob(file_str):
+    for file in glob.glob(file_str, recursive=recursive):
         df2 = pd.read_csv(file)
         df = pd.concat([df, df2], ignore_index=True)
 

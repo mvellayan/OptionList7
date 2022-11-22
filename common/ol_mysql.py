@@ -15,7 +15,7 @@ engine = ""
 def getEngine():
     global engine
     if engine == "":
-        engine = sqlalchemy.create_engine(connect_string, echo=True)
+        engine = sqlalchemy.create_engine(connect_string, echo=False)
     return engine
 
 

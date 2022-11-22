@@ -4,9 +4,10 @@ REFERENCE_DIR = "../data/reference/"
 DATA_DIR = "../data/quotes/"
 PROJECTION_DIR = "../data/projection/"
 todo_file = "../data/status/todo.csv"
-config_json = "../data/reference/stock-list.json"
-working_days = "../data/reference/market-working.csv"
-FILE_GROUPS=["../data/raw/AAPL/?q-BID_ASK-*csv", "../data/raw/AAPL/?q-TRADES-*csv"]
+stock_list_json = "../data/reference/stock-list.json"
+option_list_csv = "../data/reference/option-list-*.csv"
+market_days = "../data/reference/market-days.csv"
+FILE_GROUPS = ["../data/raw/AAPL/?q-BID_ASK-*csv", "../data/raw/AAPL/?q-TRADES-*csv"]
 
 STOCK_PULL_START_DATE: int = 20220500
 STOCK_PULL_END_DATE: int = int(datetime.now().strftime('%Y%m%d'))

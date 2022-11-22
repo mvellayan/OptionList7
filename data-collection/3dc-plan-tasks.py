@@ -41,7 +41,7 @@ def plan_tasks(pDate: str, stock):
                                    ignore_index=True)
     optionList['status'] = '1-todo'
 
-    working_days = pd.read_csv(olc.working_days, index_col=None)
+    working_days = pd.read_csv(olc.market_days, index_col=None)
     working_days = working_days.loc[working_days['working_date'] <= pDateInt]
     working_days = working_days.sort_values(by=['working_date'], ascending=False)
     working_days = working_days.reset_index(drop=True)
@@ -71,12 +71,12 @@ if __name__ == "__main__":
     print(olu.tn() + "3-plan-tasks Starting!")
 
     #build list of dates
-    todo_dates = pd.read_csv(olc.working_days, index_col=None)
+    todo_dates = pd.read_csv(olc.market_days, index_col=None)
     lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] < olc.STOCK_PULL_END_DATE)]
     lp = lp.sort_values('working_date', ascending=False)
 
     #get stock
-    configStocks = olu.getConfig(olc.config_json)
+    configStocks = olu.getConfig(olc.stock_list_json)
     stock = oli.getContract(configStocks.get("stocks")[0]['contract'])
 
     #Loop for each record
