@@ -18,7 +18,7 @@ def loadTask():
     todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
     todo_csv.to_sql(name="task_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
     insertSQL = """
-        INSERT IGNORE INTO `ol7`.`task`(`con_id`, `symbol`, `last_trade_date`, `strike`, `right`, 
+        INSERT IGNORE INTO `ol7`.`task`(`con_id`, `symbol`, `expiry`, `strike`, `right`, 
         `multiplier`, `exchange`,`secType`, `status`, `pull_date`)
             SELECT `conId`, ifnull(`localSymbol`,`symbol`) symbol, `lastTradeDateOrContractMonth`, `strike`, `right`, 
             `multiplier`, `exchange`, `secType`, `status`, `pull_date` FROM `ol7`.`task_tmp`;
@@ -34,7 +34,7 @@ def loadOptionList():
     ol = olpd.load_data(olc.option_list_csv)
     ol.to_sql(name="option_list_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
     insertSQL = """
-        INSERT IGNORE INTO ol7.option_list(con_id, symbol, last_trade_date, strike, option_type,
+        INSERT IGNORE INTO ol7.option_list(con_id, symbol, expiry, strike, option_type,
         multiplier, exchange,local_symbol)
             SELECT `conId`, `symbol`, `lastTradeDateOrContractMonth`, `strike`, `right`, 
             `multiplier`, `exchange`, `localSymbol` FROM `ol7`.`option_list_tmp`;
@@ -73,7 +73,6 @@ def loadProjectedQuotes():
 
     print(olu.tn() + "Inserted STOCK_QUTOE Rows =", s.rowcount)
     print(olu.tn() + "Inserted OPTION_QUOTE Rows =", o.rowcount)
-
 
 
 if __name__ == "__main__":
