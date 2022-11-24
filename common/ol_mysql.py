@@ -11,11 +11,12 @@ import common.ol_const as olc
 connect_string = "mysql+pymysql://" + olc.database_user + ":" + olc.database_password \
                  + "@" + olc.database_host + "/" + olc.database_schema + "?charset=utf8mb4"
 
+connect_string2 = "mysql+pymysql://" + olc.database_user + ":" + olc.database_password \
+                 + "@" + olc.database_host + "/" + olc.database_schema_model + "?charset=utf8mb4"
 engine = ""
 def getEngine():
     global engine
     if engine == "":
         engine = sqlalchemy.create_engine(connect_string, echo=False)
     return engine
-
 
