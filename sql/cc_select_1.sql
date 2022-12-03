@@ -7,14 +7,10 @@ sq.quote_date cl_quote_date,  sq.trade_average cl_sq_trade_avg, oq.ask_avg cl_oq
 		round(GET_IV(`sq`.trade_average, `o`.`strike`) - op_iv,3) AS `delta_iv`,
         round(GET_TV(`sq`.trade_average, `o`.`strike`, `oq`.`bid_avg`) - op_tv,3) AS `delta_tv`,
         round(sq.trade_average - op_sq_trade_avg,3)  AS `delta_stock`,
-        round(sq.trade_average - op_sq_trade_avg,3) + 0 delta         
-# return_amt
-# return_pct
-# return_yrly_pct
+        round(sq.trade_average - op_sq_trade_avg,3) + oq.bid_avg - o.op_oq_ask_avg delta         
 from model_cc_open_tv o, stock_quote sq, option_quote oq
-where -- o.con_id = 589911081
--- and model_id = 1
-o.op_quote_date between '2022-11-10 09:00:00' and '2022-11-10 17:00:00'
+where o.op_quote_date between '2022-11-10 09:00:00' and '2022-11-10 17:00:00'
+and model_id = 1
 and sq.quote_date > o.op_quote_date
 and sq.quote_date = oq.quote_date
 and oq.con_id = o.con_id 

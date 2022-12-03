@@ -57,7 +57,6 @@ def project_join(date_, stock):
     # Process TRADES
     dfTrades['average'] = dfTrades['average'].round(decimals=3)
     # need this column to compute average of averages
-    print(dfTrades.columns)
     dfTrades = dfTrades[['date', 'symbol', 'localSymbol', 'conId', 'low', 'average', 'trade_average_delta_30', 'trade_average_delta_60',
                          'high',  'volume', 'barCount', 'barCount_sum_30', 'barCount_sum_60']]
 
