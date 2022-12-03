@@ -50,25 +50,24 @@ def loadProjectedQuotes():
     ol = olpd.load_data(olc.PROJECTION_DIR + "/**/*.csv",  recursive=True)
     ol.to_sql(name="option_quote_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
     insertSQLOptions = """
-    INSERT IGNORE INTO ol7.option_quote(quote_date, con_id, trade_low, trade_average, trade_average_delta_30, trade_high, trade_volume,
-                     trade_barcount, barcount_sum_30, bid_min, bid_avg, ask_avg, ask_max)
-    SELECT date, `conId`, trade_low, trade_average, trade_average_delta_30, trade_high, trade_volume, 
-                    `trade_barCount`, `barCount_sum_30`, bid_min, bid_avg, ask_avg, ask_max
+    INSERT IGNORE INTO ol7.option_quote(quote_date, con_id, trade_low, trade_average, trade_average_delta_30, trade_average_delta_60, trade_high, trade_volume,
+                     trade_barcount, barcount_sum_30, barcount_sum_60, bid_min, bid_avg, ask_avg, ask_max)
+    SELECT date, `conId`, trade_low, trade_average, trade_average_delta_30, trade_average_delta_60, trade_high, trade_volume, 
+                    `trade_barCount`, `barCount_sum_30`, barcount_sum_60, bid_min, bid_avg, ask_avg, ask_max
     FROM ol7.option_quote_tmp where `localSymbol` is not null;
     """
 
     insertSQLStocks = """
-    INSERT IGNORE INTO ol7.stock_quote (quote_date, con_id, trade_low, trade_average, trade_average_delta_30, trade_high, trade_volume, 
-                trade_barcount,barcount_sum_30, bid_min, bid_avg, ask_avg, ask_max)
-    SELECT date, `conId`, trade_low, trade_average, trade_average_delta_30, trade_high, trade_volume, 
-                `trade_barCount`, `barCount_sum_30`, bid_min, bid_avg, ask_avg, ask_max 
+    INSERT IGNORE INTO ol7.stock_quote (quote_date, con_id, trade_low, trade_average, trade_average_delta_30, trade_average_delta_60, trade_high, trade_volume, 
+                trade_barcount, barcount_sum_30, barcount_sum_60, bid_min, bid_avg, ask_avg, ask_max)
+    SELECT date, `conId`, trade_low, trade_average, trade_average_delta_30, trade_average_delta_60, trade_high, trade_volume, 
+                `trade_barCount`, `barCount_sum_30`,barcount_sum_60, bid_min, bid_avg, ask_avg, ask_max 
     FROM ol7.option_quote_tmp  where symbol='AAPL'  and `localSymbol` is null;
     """
 
     with olsql.getEngine().connect().execution_options(autocommit=True) as conn:
         s = conn.execute(text(insertSQLStocks))
         o = conn.execute(text(insertSQLOptions))
-        d = conn.execute(text("DROP TABLE `ol7`.`option_quote_tmp`;"))
         d = conn.execute(text("DROP TABLE `ol7`.`option_quote_tmp`;"))
 
     print(olu.tn() + "Inserted STOCK_QUTOE Rows =", s.rowcount)

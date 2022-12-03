@@ -39,7 +39,9 @@ def project_join(date_, stock):
         df2 = pd.read_csv(file)
         df2 = df2.sort_values('date', ascending=True)
         df2['trade_average_delta_30'] = df2['average'].rolling(window=30, min_periods=30).agg({'trade_average_delta_30': find_delta})
+        df2['trade_average_delta_60'] = df2['average'].rolling(window=60, min_periods=60).agg({'trade_average_delta_60': find_delta})
         df2['barCount_sum_30'] = df2['barCount'].rolling(window=30, min_periods=30).sum()
+        df2['barCount_sum_60'] = df2['barCount'].rolling(window=60, min_periods=60).sum()
         dfTrades = pd.concat([dfTrades, df2], ignore_index=True)
 
 
@@ -55,7 +57,9 @@ def project_join(date_, stock):
     # Process TRADES
     dfTrades['average'] = dfTrades['average'].round(decimals=3)
     # need this column to compute average of averages
-    dfTrades = dfTrades[['date', 'symbol', 'localSymbol', 'conId', 'low', 'average', 'trade_average_delta_30', 'high',  'volume', 'barCount', 'barCount_sum_30']]
+    print(dfTrades.columns)
+    dfTrades = dfTrades[['date', 'symbol', 'localSymbol', 'conId', 'low', 'average', 'trade_average_delta_30', 'trade_average_delta_60',
+                         'high',  'volume', 'barCount', 'barCount_sum_30', 'barCount_sum_60']]
 
     # dfTrades['symbol'] = dfTrades.apply(lambda x: x.symbol if x.localSymbol == np.nan else x.localSymbol, axis=1)
     # dfTrades['symbol'] = dfTrades.apply(lambda x: findSymbol(x))
