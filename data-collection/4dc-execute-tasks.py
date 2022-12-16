@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from ib_insync import *
 import pandas as pd
 import common.ol_const as olc
@@ -23,6 +25,11 @@ def execute_todos(todo_file):
         if todo_csv.iloc[ind]['status'] > '4':
             ind += 1
             continue
+        if todo_csv.iloc[ind]['pull_date'].astype(str) > datetime.now().strftime("%Y%m%d"):
+            print("skipping pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str))
+            ind += 1
+            continue
+
         print(olu.tn() + f"  processing: {ind}/{todo_csv.shape[0]}: {todo_csv.iloc[ind]['pull_date']} {todo_csv.iloc[ind]['localSymbol']}/{todo_csv.iloc[ind]['symbol']}")
         c = Contract(conId=todo_csv.iloc[ind]['conId'],
                      secType=todo_csv.iloc[ind]['secType'],
