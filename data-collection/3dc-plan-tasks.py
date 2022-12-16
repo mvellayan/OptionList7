@@ -1,4 +1,6 @@
 import os
+from datetime import datetime, timedelta
+
 import pandas as pd
 import common.ol_const as olc
 import common.ol_pd as olpd
@@ -65,11 +67,48 @@ def plan_tasks(iDate: int, stock):
     todo_csv = todo_csv.sort_values(['conId', 'pull_date', 'status'], ascending=False)
     todo_csv.drop_duplicates(subset=['conId', 'pull_date', 'status'], keep='first', inplace=True)
     todo_csv = todo_csv.sort_values(['pull_date', 'conId', 'status'], ascending=False)
+
     #todo_csv = todo_csv.sort_values('status', ascending=False).drop_duplicates(['conId', 'pull_date']).sort_index()
 
     #  Saves back to todo.csv file
     todo_csv.to_csv(olc.todo_file, index=False)
     print(olu.tn() + f"  Creating tasks for {pDate}.  Adding {optionList.shape} new total {todo_csv.shape}")
+
+
+def fill_out_pull_dates():
+    if os.path.exists(olc.todo_file):
+        todo_csv = pd.read_csv(olc.todo_file, index_col=None)
+    else:
+        print ("Unexpected")
+        exit(1)
+
+    for conid2 in todo_csv["conId"].unique():
+        opt_type = str(todo_csv[todo_csv['conId'] == conid2]["secType"].min())
+        if opt_type != "OPT":
+            continue
+        min = str(todo_csv[todo_csv['conId'] == conid2]["pull_date"].min())
+        max = "20" + todo_csv[todo_csv['conId'] == conid2]["localSymbol"].iloc[0].strip()[6:12]
+        min_date = datetime.strptime(min, "%Y%m%d")
+        max_date = datetime.strptime(max, "%Y%m%d")
+        oneday = timedelta(days=1)
+        while min_date < max_date:
+            min_date += oneday
+            chkpd = todo_csv[(todo_csv['conId'] == conid2) & (todo_csv['pull_date'].astype(str) == min_date.strftime("%Y%m%d"))];
+            if (chkpd.shape[0]==0):
+                row1 = todo_csv[todo_csv['conId'] == conid2].iloc[[0]].copy()
+                row1["pull_date"] = min_date.strftime("%Y%m%d")
+                row1["status"] = "1-todo"
+                todo_csv = pd.concat([todo_csv, row1])
+
+    todo_csv['conId'] = pd.to_numeric(todo_csv['conId'], downcast='integer')
+    todo_csv['pull_date'] = pd.to_numeric(todo_csv['pull_date'], downcast='integer')
+    todo_csv = todo_csv.sort_values(['conId', 'pull_date', 'status'], ascending=False)
+    todo_csv.drop_duplicates(subset=['conId', 'pull_date'], keep='first', inplace=True)
+    todo_csv = todo_csv.sort_values(['pull_date', 'conId'], ascending=False)
+
+    # todo_csv = todo_csv.sort_values('status', ascending=False).drop_duplicates(['conId', 'pull_date']).sort_index()
+    #  Saves back to todo.csv file
+    todo_csv.to_csv(olc.todo_file, index=False)
 
 
 if __name__ == "__main__":
@@ -88,5 +127,9 @@ if __name__ == "__main__":
 
     #Loop for each record
     lp['working_date'].apply(plan_tasks, stock=stock)
+
+    print(olu.tn() + "Filling in missing quotes!")
+
+    fill_out_pull_dates()
 
     print(olu.tn() + "3-plan-tasks done!")
