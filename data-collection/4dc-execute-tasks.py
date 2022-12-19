@@ -22,6 +22,13 @@ def execute_todos(todo_file):
 
     ind = 0
     while ind < todo_csv.shape[0]:
+        pull_date_str = todo_csv.iloc[ind]['pull_date'].astype(str)
+        pullDateDate = datetime.strptime(pull_date_str, '%Y%m%d')
+        if pullDateDate.weekday() > 4:
+            # todo_csv.drop(ind, inplace=True)
+            ind += 1
+            print("skipping pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str), " weekday=", pullDateDate.weekday() )
+            continue
         if todo_csv.iloc[ind]['status'] > '4':
             ind += 1
             continue
@@ -55,3 +62,4 @@ def execute_todos(todo_file):
 if __name__ == "__main__":
     execute_todos(olc.todo_file)
     print(olu.tn() + "4-execute-tasks done!")
+

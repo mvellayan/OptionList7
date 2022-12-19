@@ -65,7 +65,7 @@ def plan_tasks(iDate: int, stock):
     todo_csv['conId'] = pd.to_numeric(todo_csv['conId'], downcast='integer')
     todo_csv['pull_date'] = pd.to_numeric(todo_csv['pull_date'], downcast='integer')
     todo_csv = todo_csv.sort_values(['conId', 'pull_date', 'status'], ascending=False)
-    todo_csv.drop_duplicates(subset=['conId', 'pull_date', 'status'], keep='first', inplace=True)
+    todo_csv.drop_duplicates(subset=['conId', 'pull_date'], keep='first', inplace=True)
     todo_csv = todo_csv.sort_values(['pull_date', 'conId', 'status'], ascending=False)
 
     #todo_csv = todo_csv.sort_values('status', ascending=False).drop_duplicates(['conId', 'pull_date']).sort_index()
