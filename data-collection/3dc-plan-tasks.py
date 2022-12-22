@@ -1,4 +1,10 @@
+import sys
 import os
+from pathlib import Path
+uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
+f = os.path.realpath(__file__)
+sys.path.append(uppath(f, 2))
+
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -99,16 +105,7 @@ def fill_out_pull_dates():
                 row1["pull_date"] = min_date.strftime("%Y%m%d")
                 row1["status"] = "1-todo"
                 todo_csv = pd.concat([todo_csv, row1])
-
-    todo_csv['conId'] = pd.to_numeric(todo_csv['conId'], downcast='integer')
-    todo_csv['pull_date'] = pd.to_numeric(todo_csv['pull_date'], downcast='integer')
-    todo_csv = todo_csv.sort_values(['conId', 'pull_date', 'status'], ascending=False)
-    todo_csv.drop_duplicates(subset=['conId', 'pull_date'], keep='first', inplace=True)
-    todo_csv = todo_csv.sort_values(['pull_date', 'conId'], ascending=False)
-
-    # todo_csv = todo_csv.sort_values('status', ascending=False).drop_duplicates(['conId', 'pull_date']).sort_index()
-    #  Saves back to todo.csv file
-    todo_csv.to_csv(olc.todo_file, index=False)
+        olpd.save_todo_csv(todo_csv)
 
 
 if __name__ == "__main__":

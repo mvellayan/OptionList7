@@ -1,10 +1,17 @@
-from datetime import datetime
+import sys
+import os
+from pathlib import Path
+uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
+f = os.path.realpath(__file__)
+sys.path.append(uppath(f, 2))
 
+from datetime import datetime
 from ib_insync import *
 import pandas as pd
 import common.ol_const as olc
 import common.ol_ib as oli
 import common.ol_util as olu
+import common.ol_pd as olpd
 
 """
    4-execute-tasks
@@ -55,7 +62,7 @@ def execute_todos(todo_file):
             todo_csv.at[ind, 'status'] = '5-done'
         todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
         # Saves back to todo.csv file
-        todo_csv.to_csv(todo_file, index=False)
+        olpd.save_todo_csv(todo_csv)
         ind += 1
 
 

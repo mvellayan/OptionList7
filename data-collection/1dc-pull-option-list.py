@@ -1,4 +1,9 @@
+import sys
 import os
+from pathlib import Path
+uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
+f = os.path.realpath(__file__)
+sys.path.append(uppath(f, 2))
 import pandas as pd
 
 import common.ol_const as olc
