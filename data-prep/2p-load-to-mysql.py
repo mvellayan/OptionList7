@@ -81,11 +81,29 @@ def loadProjectedQuotes():
     print(olu.tn() + "Inserted OPTION_QUOTE Rows =", o.rowcount)
 
 
+def cleanup():
+    updateSQL = """
+        update `ol7`.`option_quote` oq, `ol7`.`stock_quote` sq, `ol7`.`option_list` ol
+         set oq.iv = get_iv(sq.trade_average, ol.strike, ol.option_type),
+              oq.open_tv = get_tv(sq.trade_average, ol.strike, oq.bid_avg, oq.ask_avg, ol.option_type, 'OPEN'),
+             oq.close_tv = get_tv(sq.trade_average, ol.strike, oq.bid_avg, oq.ask_avg, ol.option_type, 'CLOSE')
+        where sq.quote_date = oq.quote_date
+        and ol.con_id = oq.con_id;
+    """
+    with olsql.getEngine().connect().execution_options(autocommit=True) as conn:
+        r = conn.execute(text(updateSQL))
+        d = conn.execute(text("delete from `ol7`.`option_quote` where close_tv is null or open_tv is null;"))
+
+    print(olu.tn() + "Inserted TASK Rows =", r.rowcount)
+
+
+
 if __name__ == "__main__":
     print(olu.tn() + "2p-load-to-mysql Starting")
 
     loadTask()
     loadOptionList()
     loadProjectedQuotes()
+    cleanup()
 
     print(olu.tn() + "2p-load-to-mysql done!")
