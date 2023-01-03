@@ -34,13 +34,13 @@ def execute_todos(todo_file):
         if pullDateDate.weekday() > 4:
             # todo_csv.drop(ind, inplace=True)
             ind += 1
-            print("skipping pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str), " weekday=", pullDateDate.weekday() )
+            print("skipping weekend pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str), " weekday=", pullDateDate.weekday() )
             continue
         if todo_csv.iloc[ind]['status'] > '4':
             ind += 1
             continue
         if todo_csv.iloc[ind]['pull_date'].astype(str) > datetime.now().strftime("%Y%m%d"):
-            print("skipping pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str))
+            print("skipping future pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str))
             ind += 1
             continue
 
