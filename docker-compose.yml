@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  historic-quotes:
+    image: ol7:latest
+    build: .
+#    command: python3 ib_realtime_18_collector.py config/config-fb.json 
+#   restart: always
+    user: 1000:1000
+    volumes:
+      - ./data:/Developmemnt/OptionList7/data
+    network_mode: "host"
