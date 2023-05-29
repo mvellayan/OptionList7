@@ -12,7 +12,8 @@ python3  4dc-execute-tasks.py
 
 cd ../data-prep/
 echo `date`: step: 5
-python3 1p-project-join.py	
+#python3 1p-project-join.py	
 echo `date`: step: 6
-python3 2p-load-to-mysql.py
+#python3 2p-load-to-mysql.py
+cd ..
 echo `date`: Done!
