@@ -3,9 +3,14 @@ services:
   historic-quotes:
     image: ol7:latest
     build: .
-#    command: python3 ib_realtime_18_collector.py config/config-fb.json 
+#     command: - sh - -c - | cd ./data-collection/ python3 ./1dc-pull-option-list.py
+#    command: python3 ./data-collection/1dc-pull-option-list.py
+    command: sh ./pull_option_data.sh
+#    command: sleep 3000
 #   restart: always
     user: 1000:1000
     volumes:
-      - ./data:/Developmemnt/OptionList7/data
+      - ./data:/Development/OptionList7/data
     network_mode: "host"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
