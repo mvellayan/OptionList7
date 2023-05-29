@@ -12,6 +12,7 @@ import common.ol_const as olc
 import common.ol_ib as oli
 import common.ol_util as olu
 import common.ol_pd as olpd
+from datetime import timedelta
 
 """
    4-execute-tasks
@@ -30,17 +31,32 @@ def execute_todos(todo_file):
     ind = 0
     while ind < todo_csv.shape[0]:
         pull_date_str = todo_csv.iloc[ind]['pull_date'].astype(str)
+
+        # if todo_csv.iloc[ind]['lastTradeDateOrContractMonth'] != 20230421:
+        #     print('Skipping Not today', todo_csv.iloc[ind]['lastTradeDateOrContractMonth'].astype(str),
+        #           '20230421', todo_csv.iloc[ind]['lastTradeDateOrContractMonth'] != 20230421)
+        #     ind += 1
+        #     continue
         pullDateDate = datetime.strptime(pull_date_str, '%Y%m%d')
+
         if pullDateDate.weekday() > 4:
             # todo_csv.drop(ind, inplace=True)
             ind += 1
-            print("skipping weekend pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str), " weekday=", pullDateDate.weekday() )
+            print("Skipping weekend pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str),
+                  " weekday=", pullDateDate.weekday() )
             continue
+
         if todo_csv.iloc[ind]['status'] > '4':
             ind += 1
+            print("Skipping status: " , todo_csv.iloc[ind]['status'])
             continue
-        if todo_csv.iloc[ind]['pull_date'].astype(str) > datetime.now().strftime("%Y%m%d"):
-            print("skipping future pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str))
+
+        xdate = datetime.now()
+        # if (xdate.hour < 16):
+        #     xdate = xdate - timedelta(days = 1)
+        today_date = xdate.strftime("%Y%m%d")
+        if todo_csv.iloc[ind]['pull_date'].astype(str) > today_date:
+            print("Skipping future pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str))
             ind += 1
             continue
 

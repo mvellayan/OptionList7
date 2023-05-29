@@ -1,5 +1,6 @@
 import sys
 import os
+import datetime
 from pathlib import Path
 uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
 f = os.path.realpath(__file__)
@@ -30,6 +31,10 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def plan_tasks(iDate: int, stock):
     sDate = str(iDate)
+    # only look at last 30 days!
+    cutoffDate = int(str((datetime.today() - timedelta(30)).date()).replace("-", ""))
+    if int(sDate) < cutoffDate:
+        return
 
     # read current quotes to figure out min/max trading range
     df2 = oli.check_pull_historical_quote_to_file(sDate, stock)
@@ -53,6 +58,7 @@ def plan_tasks(iDate: int, stock):
     working_days = pd.read_csv(olc.market_days, index_col=None)
     working_days = working_days.loc[working_days['working_date'] <= iDate]
     working_days = working_days.sort_values(by=['working_date'], ascending=False)
+    working_days = working_days.head(22)  # pull only 3 weeks of data
     working_days = working_days.reset_index(drop=True)
 
     # read previous list of todo tasks
@@ -117,6 +123,10 @@ if __name__ == "__main__":
 
     lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] <= olc.STOCK_PULL_END_DATE)]
     lp = lp.sort_values('working_date', ascending=False)
+
+    if todo_dates.loc[todo_dates['working_date'] > olc.STOCK_PULL_END_DATE].shape[0] == 0:
+        print("NO CURRENT WORKING DATE.  fix market-days.csv file!!")
+        exit(1)
 
     #get stock
     configStocks = olu.getConfig(olc.stock_list_json)
