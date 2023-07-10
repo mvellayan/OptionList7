@@ -14,10 +14,12 @@ market_days = "../data/reference/market-days.csv"
 
 FILE_GROUPS = ["../data/raw/AAPL/?q-BID_ASK-*csv", "../data/raw/AAPL/?q-TRADES-*csv"]
 
-STOCK_PULL_START_DATE: int = 20220500
 
 today = datetime.now().today()
 yesterday = today - timedelta(days=1)
+
+STOCK_PULL_START_DATE: int = int((today - timedelta(days=30)).strftime('%Y%m%d'))
+
 if datetime.now().time() > time(16, 0, 0):
     STOCK_PULL_END_DATE: int = int(today.strftime('%Y%m%d'))
 else:

@@ -46,6 +46,7 @@ def check_pull_historical_quote_to_file(sDate:str, contract):
         if os.path.exists(fn):
             df = pd.read_csv(fn, index_col=None)
             if df.shape[0] > 300:
+                print("...skipping.  file exists. ", fn)
                 continue
         ib = getIB()
         bars = ib.reqHistoricalData(contract, endDateTime=sDate + " 16:00:00",

@@ -58,7 +58,7 @@ def plan_tasks(iDate: int, stock):
     working_days = pd.read_csv(olc.market_days, index_col=None)
     working_days = working_days.loc[working_days['working_date'] <= iDate]
     working_days = working_days.sort_values(by=['working_date'], ascending=False)
-    working_days = working_days.head(22)  # pull only 3 weeks of data
+    working_days = working_days.head(28)  # pull only 3 weeks of data
     working_days = working_days.reset_index(drop=True)
 
     # read previous list of todo tasks
@@ -68,7 +68,7 @@ def plan_tasks(iDate: int, stock):
         todo_csv = pd.DataFrame()
 
     # pull for past 15 days
-    for idx in range(15):
+    for idx in range(22):
         current_list = optionList.copy()
         pDate = str(round(working_days.loc[idx]['working_date']))
         current_list["pull_date"] = pDate
@@ -87,7 +87,7 @@ def plan_tasks(iDate: int, stock):
     print(olu.tn() + f"  Creating tasks for {pDate}.  Adding {optionList.shape} new total {todo_csv.shape}")
 
 
-def fill_out_pull_dates():
+def write_todo_to_file():
     if os.path.exists(olc.todo_file):
         todo_csv = pd.read_csv(olc.todo_file, index_col=None)
     else:
@@ -105,6 +105,9 @@ def fill_out_pull_dates():
         oneday = timedelta(days=1)
         while min_date < max_date:
             min_date += oneday
+            wrkday = todo_dates.loc[(todo_dates['working_date'] == int(min_date.strftime("%Y%m%d")))]
+            if (wrkday.shape[0]==0):
+                continue
             chkpd = todo_csv[(todo_csv['conId'] == conid2) & (todo_csv['pull_date'].astype(str) == min_date.strftime("%Y%m%d"))];
             if (chkpd.shape[0]==0):
                 row1 = todo_csv[todo_csv['conId'] == conid2].iloc[[0]].copy()
@@ -115,28 +118,30 @@ def fill_out_pull_dates():
 
 
 if __name__ == "__main__":
-    print(olu.tn() + "3-plan-tasks Starting!")
+    print(olu.tn() + "3-planed-tasks Starting!")
 
-    #build list of dates
+    # 1. build list of dates
     todo_dates = pd.read_csv(olc.market_days, index_col=None)
     todo_dates = todo_dates.astype({"working_date": int, "working_hour": float})
 
     lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] <= olc.STOCK_PULL_END_DATE)]
-    lp = lp.sort_values('working_date', ascending=False)
+#    lp = lp.sort_values('working_date', ascending=False)
 
     if todo_dates.loc[todo_dates['working_date'] > olc.STOCK_PULL_END_DATE].shape[0] == 0:
         print("NO CURRENT WORKING DATE.  fix market-days.csv file!!")
         exit(1)
 
-    #get stock
+    #2. get stock.
+    # Hard coded for the 1st one -- AAPL
+    # TODO loop around a list
     configStocks = olu.getConfig(olc.stock_list_json)
     stock = oli.getContract(configStocks.get("stocks")[0]['contract'])
 
-    #Loop for each record
+    #Loop for each date
     lp['working_date'].apply(plan_tasks, stock=stock)
 
     print(olu.tn() + "Filling in missing quotes!")
 
-    fill_out_pull_dates()
+    write_todo_to_file()
 
     print(olu.tn() + "3-plan-tasks done!")

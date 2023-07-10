@@ -26,7 +26,12 @@ from datetime import timedelta
 def execute_todos(todo_file):
     todo_csv = pd.read_csv(todo_file, index_col=None)
     todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
+    # filter out future dates
+    # todo_csv = todo_csv.loc[todo_csv['pull_date'] <= olc.STOCK_PULL_END_DATE]
+    # todo_csv = todo_csv.loc[todo_csv['status'] < '5']
+
     todo_csv.sort_values(by=['pull_date', 'localSymbol', 'symbol'], ascending=False, inplace=True)
+    todo_csv.reset_index(inplace=True, drop=True)
 
     ind = 0
     while ind < todo_csv.shape[0]:
@@ -37,26 +42,26 @@ def execute_todos(todo_file):
         #           '20230421', todo_csv.iloc[ind]['lastTradeDateOrContractMonth'] != 20230421)
         #     ind += 1
         #     continue
-        pullDateDate = datetime.strptime(pull_date_str, '%Y%m%d')
+        # pullDateDate = datetime.strptime(pull_date_str, '%Y%m%d')
 
-        if pullDateDate.weekday() > 4:
-            # todo_csv.drop(ind, inplace=True)
-            ind += 1
-            print("Skipping weekend pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str),
-                  " weekday=", pullDateDate.weekday() )
-            continue
+        # if pullDateDate.weekday() > 4:
+        #     # todo_csv.drop(ind, inplace=True)
+        #     ind += 1
+        #     print("Skipping weekend pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str),
+        #           " weekday=", pullDateDate.weekday() )
+        #     continue
 
         if todo_csv.iloc[ind]['status'] > '4':
             ind += 1
-            print("Skipping status: " , todo_csv.iloc[ind]['status'])
+            # print("Skipping status: ", todo_csv.iloc[ind]['status'])
             continue
 
         xdate = datetime.now()
-        # if (xdate.hour < 16):
-        #     xdate = xdate - timedelta(days = 1)
+        if (xdate.hour < 16):
+            xdate = xdate - timedelta(days = 1)
         today_date = xdate.strftime("%Y%m%d")
         if todo_csv.iloc[ind]['pull_date'].astype(str) > today_date:
-            print("Skipping future pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str))
+            # print("Skipping future pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str))
             ind += 1
             continue
 
@@ -67,18 +72,20 @@ def execute_todos(todo_file):
                      symbol=todo_csv.iloc[ind]['symbol'],
                      localSymbol=todo_csv.iloc[ind]['localSymbol'],
                      currency='USD')
-        df = oli.check_pull_historical_quote_to_file(str(todo_csv.iloc[ind]['pull_date']), c)
-        if df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '1-todo':
-            todo_csv.at[ind, 'status'] = '2-todo'
-        elif df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '2-todo':
-            todo_csv.at[ind, 'status'] = '3-todo'
-        elif df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '3-todo':
-            todo_csv.at[ind, 'status'] = '9-error, after 3 tries'
-        else:
-            todo_csv.at[ind, 'status'] = '5-done'
-        todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
-        # Saves back to todo.csv file
-        olpd.save_todo_csv(todo_csv)
+        #if todo_csv.iloc[ind]['status'] == '3-todo':
+        if 1==1:
+            df = oli.check_pull_historical_quote_to_file(str(todo_csv.iloc[ind]['pull_date']), c)
+            if df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '1-todo':
+                todo_csv.at[ind, 'status'] = '2-todo'
+            elif df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '2-todo':
+                todo_csv.at[ind, 'status'] = '3-todo'
+            elif df.shape[0] == 0 and todo_csv.at[ind, 'status'] == '3-todo':
+                todo_csv.at[ind, 'status'] = '9-error, after 3 tries'
+            else:
+                todo_csv.at[ind, 'status'] = '5-done'
+            todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
+            # Saves back to todo.csv file
+            olpd.save_todo_csv(todo_csv)
         ind += 1
 
 

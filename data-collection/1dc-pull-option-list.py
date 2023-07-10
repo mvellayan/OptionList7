@@ -27,6 +27,17 @@ def pull_option_list():
         contract = oli.getContract(stock['contract'])
         symbol = contract.symbol.replace(" ", "")[0:4]
         option_list_file = olc.REFERENCE_DIR + "option-list-" + symbol + ".csv"
+        if os.path.exists(option_list_file):
+            #get file creation date
+            import time
+            c_time = os.path.getctime(option_list_file)
+            age = (time.time() - c_time) / (60 * 60 * 24)
+            #check if file is older than 1 day
+            if age > 1:
+                # get julian date from ctime
+                file_date = time.strftime("%Y%m%d%H%M%S", time.localtime(c_time))
+                os.rename(option_list_file, option_list_file + "." + file_date)
+
         if contract.secType == "STK":
             df = pd.DataFrame()
 
