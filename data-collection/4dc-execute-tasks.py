@@ -57,8 +57,8 @@ def execute_todos(todo_file):
             continue
 
         xdate = datetime.now()
-        if (xdate.hour < 16):
-            xdate = xdate - timedelta(days = 1)
+        #if (xdate.hour < 16):
+        #    xdate = xdate - timedelta(days = 1)
         today_date = xdate.strftime("%Y%m%d")
         if todo_csv.iloc[ind]['pull_date'].astype(str) > today_date:
             # print("Skipping future pull date: ", todo_csv.iloc[ind]['pull_date'].astype(str))

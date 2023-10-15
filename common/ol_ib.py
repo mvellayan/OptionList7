@@ -50,7 +50,7 @@ def check_pull_historical_quote_to_file(sDate:str, contract):
                 continue
         ib = getIB()
         bars = ib.reqHistoricalData(contract, endDateTime=sDate + " 16:00:00",
-                                    durationStr='5 D', barSizeSetting='1 min',
+                                    durationStr='8 D', barSizeSetting='1 min',
                                     whatToShow=sq_type, useRTH=True)
         if len(bars) > 0:
             df = util.df(bars)
