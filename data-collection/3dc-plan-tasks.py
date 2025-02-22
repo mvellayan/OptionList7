@@ -67,7 +67,8 @@ def plan_tasks(iDate: int, stock):
     else:
         todo_csv = pd.DataFrame()
 
-    # pull for past 15 days
+    # pull for past 15/22 days
+    # for idx in range(15):
     for idx in range(22):
         current_list = optionList.copy()
         pDate = str(round(working_days.loc[idx]['working_date']))

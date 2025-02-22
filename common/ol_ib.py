@@ -11,12 +11,15 @@ import os
 
 import common.ol_const as olc
 import common.ol_util as olu
+from ib_insync import *
+
 
 global_ib = IB()
 def getIB():
+    #util.logToConsole('DEBUG')
     global global_ib
     if not global_ib.isConnected():
-        global_ib.connect('host.docker.internal', 7496, clientId=1)
+        global_ib.connect("127.0.0.1", 7496, clientId=1)
     return global_ib
 
 """
