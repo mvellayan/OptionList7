@@ -56,9 +56,9 @@ def load_projected_quotes():
     """
 
     insertSQLStocks = """
-    INSERT IGNORE INTO ol7.stock_quote (quote_date, con_id, trade_low, trade_average, trade_average_delta_30, trade_average_delta_60, trade_high, trade_volume, 
+    INSERT IGNORE INTO ol7.stock_quote (quote_date, con_id, trade_low, trade_average, trade_high, trade_volume, 
                 trade_barcount, bid_min, bid_avg, ask_avg, ask_max, vix)
-    SELECT date, `conId`, trade_low, trade_average, trade_average_delta_30, trade_average_delta_60, trade_high, trade_volume, 
+    SELECT date, `conId`, trade_low, trade_average, trade_high, trade_volume, 
                 `trade_barCount`, bid_min, bid_avg, ask_avg, ask_max, vix
     FROM ol7.option_quote_tmp  where symbol='AAPL'  and `localSymbol` is null;
     """
