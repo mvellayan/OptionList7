@@ -2,11 +2,10 @@
 #source ./bin/activate
 echo `date`: Step: 1
 cd ./data-collection
-echo `date`: Step: 2
 python3 1dc-pull-option-list.py
-echo `date`: Step: 3 
+echo `date`: Step: 2
 python3 3dc-plan-tasks.py
-echo `date`: step: 4
+echo `date`: step: 3
 python3  4dc-execute-tasks.py
 
 

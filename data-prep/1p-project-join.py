@@ -107,6 +107,7 @@ def find_delta(rows):
     return x
 
 if __name__ == "__main__":
+    """
     print(olu.tn() + "1p-projection Starting")
 
     #get dates
@@ -122,3 +123,5 @@ if __name__ == "__main__":
     lp['working_date'].apply(project_join, stock=stock)
     # project_join("20221116", stock)
     print(olu.tn() + "1p-projection done!")
+    """
+    print("this is no longer required, I think")
