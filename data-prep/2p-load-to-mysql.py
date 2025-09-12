@@ -86,6 +86,7 @@ def cleanup():
         d = conn.execute(text("delete from `ol7`.`option_quote` where close_tv is null or open_tv is null;"))
 
     print(olu.tn() + "Inserted TASK Rows =", r.rowcount)
+    print(olu.tn() + "DELETED TASK Rows because of null close_tv or open_tv =", d.rowcount)
 
 
 
