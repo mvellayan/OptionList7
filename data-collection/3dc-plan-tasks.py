@@ -2,6 +2,9 @@ import sys
 import os
 import datetime
 from pathlib import Path
+
+from tqdm import tqdm
+
 uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
 f = os.path.realpath(__file__)
 sys.path.append(uppath(f, 2))
@@ -31,13 +34,18 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def plan_tasks(iDate: int, stock):
     sDate = str(iDate)
+    # This check is not needed.  It has already been performed by the caller.
     # only look at last 30 days!
-    cutoffDate = int(str((datetime.today() - timedelta(30)).date()).replace("-", ""))
-    if int(sDate) < cutoffDate:
-        return
+    # cutoffDate = int(str((datetime.today() - timedelta(30)).date()).replace("-", ""))
+    # if int(sDate) < cutoffDate:
+    #    return
 
     # read current quotes to figure out min/max trading range
     df2 = oli.check_pull_historical_quote_to_file(sDate, stock)
+    if df2.shape[0] == 0:
+        print(f"No options defined for date: {sDate} trading range")
+        return
+
     min_, max_ = df2['open'].agg(['min', 'max'])
 
     # build list of options to pull
@@ -128,7 +136,7 @@ if __name__ == "__main__":
     lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] <= olc.STOCK_PULL_END_DATE)]
 #    lp = lp.sort_values('working_date', ascending=False)
 
-    if todo_dates.loc[todo_dates['working_date'] > olc.STOCK_PULL_END_DATE].shape[0] == 0:
+    if lp.shape[0] == 0:
         print("NO CURRENT WORKING DATE.  fix market-days.csv file!!")
         exit(1)
 
@@ -138,8 +146,9 @@ if __name__ == "__main__":
     configStocks = olu.getConfig(olc.stock_list_json)
     stock = oli.getContract(configStocks.get("stocks")[0]['contract'])
 
+    tqdm.pandas(desc="Working Dates", unit="date", colour="green", ncols=100)
     #Loop for each date
-    lp['working_date'].apply(plan_tasks, stock=stock)
+    lp['working_date'].progress_apply(plan_tasks, stock=stock)
 
     print(olu.tn() + "Filling in missing quotes!")
 

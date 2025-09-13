@@ -9,6 +9,7 @@ import pandas as pd
 import common.ol_const as olc
 import common.ol_ib as oli
 import common.ol_util as olu
+from tqdm import tqdm
 
 '''
         1. for a list of stocks in the stock-list.json
@@ -23,7 +24,7 @@ import common.ol_util as olu
 def pull_option_list():
     stocks = olu.getConfig(olc.stock_list_json).get("stocks")
     # 1. for a list of stocks in the stock-list.json
-    for stock in stocks:
+    for stock in tqdm(stocks, desc="Stock"):
         contract = oli.getContract(stock['contract'])
         symbol = contract.symbol.replace(" ", "")[0:4]
         option_list_file = olc.REFERENCE_DIR + "option-list-" + symbol + ".csv"

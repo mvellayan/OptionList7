@@ -1,11 +1,4 @@
-import glob
-import datetime
-
 import pandas as pd
-from pprint import pprint
-import json
-from os.path import exists
-from ib_insync import *
 from pathlib import Path
 import os
 
@@ -33,7 +26,7 @@ def getContract(data: dict):
 
 
 def check_pull_historical_quote_to_file(sDate:str, contract):
-    if type(sDate) != str: 1/0
+    assert type(sDate) == str, "sDate should be string"
     for sq_type in ['BID_ASK', 'TRADES']:
 
         # Vix does not have BID_ASK, only TRADES
@@ -69,6 +62,7 @@ def check_pull_historical_quote_to_file(sDate:str, contract):
                 Path(fn2).parent.mkdir(parents=True, exist_ok=True)
                 df_ = df.loc[df['date'][::].astype(str).str.slice(stop=10) == date_]
                 df_.to_csv(fn2, index=False)
+                print(f"...writing for {sDate} data {df_.shape} to file {fn}")
         else:
             df = pd.DataFrame()
             break
