@@ -1,15 +1,13 @@
 import sys
 import os
-import datetime
 from pathlib import Path
+from datetime import datetime, timedelta
 
 from tqdm import tqdm
 
 uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
 f = os.path.realpath(__file__)
 sys.path.append(uppath(f, 2))
-
-from datetime import datetime, timedelta
 
 import pandas as pd
 import common.ol_const as olc
@@ -54,11 +52,13 @@ def plan_tasks(iDate: int, stock):
     if optionList.shape[0] == 0:
         print(f"No options defined for date: {sDate} trading range: {min_} - {max_}")
         return
-    optionList = optionList.append(
+
+    # Use pd.concat instead of deprecated append()
+    additional_rows = pd.DataFrame([
         {'conId': stock.conId, 'symbol': stock.symbol, 'exchange': stock.exchange, 'secType': stock.secType},
-        ignore_index=True)
-    optionList = optionList.append({'conId': '13455763', 'symbol': 'VIX', 'exchange': 'CBOE', 'secType': 'IND'},
-                                   ignore_index=True)
+        {'conId': '13455763', 'symbol': 'VIX', 'exchange': 'CBOE', 'secType': 'IND'}
+    ])
+    optionList = pd.concat([optionList, additional_rows], ignore_index=True)
     optionList['status'] = '1-todo'
 
     # build a list of working days to pull quotes
@@ -75,55 +75,89 @@ def plan_tasks(iDate: int, stock):
     else:
         todo_csv = pd.DataFrame()
 
-    # pull for past 15/22 days
-    # for idx in range(15):
+    # pull for past 15/22 days - collect all in list first, then concatenate once
+    task_lists = []
     for idx in range(22):
         current_list = optionList.copy()
         pDate = str(round(working_days.loc[idx]['working_date']))
         current_list["pull_date"] = pDate
-        todo_csv = pd.concat([current_list, todo_csv], axis=0, ignore_index=True)
+        task_lists.append(current_list)
+
+    # Single concatenation instead of 22 separate ones
+    if task_lists:
+        new_tasks = pd.concat(task_lists, axis=0, ignore_index=True)
+        todo_csv = pd.concat([new_tasks, todo_csv], axis=0, ignore_index=True)
 
     todo_csv['conId'] = pd.to_numeric(todo_csv['conId'], downcast='integer')
     todo_csv['pull_date'] = pd.to_numeric(todo_csv['pull_date'], downcast='integer')
+
+    # Combined sort and dedup in single operation
     todo_csv = todo_csv.sort_values(['conId', 'pull_date', 'status'], ascending=False)
     todo_csv.drop_duplicates(subset=['conId', 'pull_date'], keep='first', inplace=True)
     todo_csv = todo_csv.sort_values(['pull_date', 'conId', 'status'], ascending=False)
 
-    #todo_csv = todo_csv.sort_values('status', ascending=False).drop_duplicates(['conId', 'pull_date']).sort_index()
-
     #  Saves back to todo.csv file
     todo_csv.to_csv(olc.todo_file, index=False)
-    print(olu.tn() + f"  Creating tasks for {pDate}.  Adding {optionList.shape} new total {todo_csv.shape}")
+    print(olu.tn() + f"  Creating tasks for {sDate}.  Adding {optionList.shape} new total {todo_csv.shape}")
 
 
 def write_todo_to_file():
     if os.path.exists(olc.todo_file):
         todo_csv = pd.read_csv(olc.todo_file, index_col=None)
     else:
-        print ("Unexpected")
+        print("Unexpected")
         exit(1)
 
+    # Create a set of working dates for faster lookup
+    working_dates_set = set(todo_dates['working_date'].values)
+
+    # Collect all new rows first, then concatenate once at the end
+    new_rows = []
+
     for conid2 in todo_csv["conId"].unique():
-        opt_type = str(todo_csv[todo_csv['conId'] == conid2]["secType"].min())
+        # Filter once for this conId
+        conid_rows = todo_csv[todo_csv['conId'] == conid2]
+
+        opt_type = str(conid_rows["secType"].min())
         if opt_type != "OPT":
             continue
-        min = str(todo_csv[todo_csv['conId'] == conid2]["pull_date"].min())
-        max = "20" + todo_csv[todo_csv['conId'] == conid2]["localSymbol"].iloc[0].strip()[6:12]
-        min_date = datetime.strptime(min, "%Y%m%d")
-        max_date = datetime.strptime(max, "%Y%m%d")
+
+        min_pull = str(conid_rows["pull_date"].min())
+        max_symbol = "20" + conid_rows["localSymbol"].iloc[0].strip()[6:12]
+        min_date = datetime.strptime(min_pull, "%Y%m%d")
+        max_date = datetime.strptime(max_symbol, "%Y%m%d")
+
+        # Get existing pull_dates for this conId for faster lookup
+        existing_dates = set(conid_rows['pull_date'].astype(str).values)
+
+        # Template row for this conId
+        template_row = conid_rows.iloc[[0]].copy()
+
         oneday = timedelta(days=1)
-        while min_date < max_date:
-            min_date += oneday
-            wrkday = todo_dates.loc[(todo_dates['working_date'] == int(min_date.strftime("%Y%m%d")))]
-            if (wrkday.shape[0]==0):
+        current_date = min_date
+        while current_date < max_date:
+            current_date += oneday
+            date_str = current_date.strftime("%Y%m%d")
+            date_int = int(date_str)
+
+            # Fast set lookup instead of DataFrame filtering
+            if date_int not in working_dates_set:
                 continue
-            chkpd = todo_csv[(todo_csv['conId'] == conid2) & (todo_csv['pull_date'].astype(str) == min_date.strftime("%Y%m%d"))];
-            if (chkpd.shape[0]==0):
-                row1 = todo_csv[todo_csv['conId'] == conid2].iloc[[0]].copy()
-                row1["pull_date"] = min_date.strftime("%Y%m%d")
-                row1["status"] = "1-todo"
-                todo_csv = pd.concat([todo_csv, row1])
-        olpd.save_todo_csv(todo_csv)
+
+            if date_str in existing_dates:
+                continue
+
+            # Create new row
+            new_row = template_row.copy()
+            new_row["pull_date"] = date_str
+            new_row["status"] = "1-todo"
+            new_rows.append(new_row)
+
+    # Single concatenation at the end
+    if new_rows:
+        todo_csv = pd.concat([todo_csv] + new_rows, ignore_index=True)
+
+    olpd.save_todo_csv(todo_csv)
 
 
 if __name__ == "__main__":
