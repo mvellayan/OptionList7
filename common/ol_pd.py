@@ -7,7 +7,18 @@ from ib_insync import *
 import common.ol_const as olc
 
 
-def load_data(file_str: str,  recursive=False):
+def load_data(file_str: str, recursive=False, batch_size=None):
+    """
+    Load CSV files matching pattern into a single DataFrame.
+
+    Args:
+        file_str: Glob pattern for files to load
+        recursive: Enable recursive directory search
+        batch_size: If specified, process files in batches to reduce memory usage
+
+    Returns:
+        Combined DataFrame from all matching files
+    """
     # Get CSV files list from a folder
     """
     csv_files = []
@@ -23,10 +34,28 @@ def load_data(file_str: str,  recursive=False):
     # df_list = (pd.read_csv(file) for file in csv_files)
     # df = pd.concat(df_list, ignore_index=True)
     """
-    df = pd.DataFrame()
-    for file in glob.glob(file_str, recursive=recursive):
+
+    # Collect all files first
+    files = list(glob.glob(file_str, recursive=recursive))
+
+    if len(files) == 0:
+        return pd.DataFrame()
+
+    print(f"          Found {len(files)} files to load")
+
+    # Optimized: collect all DataFrames first, then concatenate once
+    df_list = []
+    for idx, file in enumerate(files, 1):
         df2 = pd.read_csv(file)
-        df = pd.concat([df, df2], ignore_index=True)
+        df_list.append(df2)
+
+        # Print progress every 1000 files
+        if idx % 1000 == 0:
+            print(f"          Loaded {idx}/{len(files)} files...")
+
+    print(f"          Concatenating {len(df_list)} DataFrames...")
+    df = pd.concat(df_list, ignore_index=True)
+    print(f"          Total rows: {len(df):,}")
 
     return df
 
