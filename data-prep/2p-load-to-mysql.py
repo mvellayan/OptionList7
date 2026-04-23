@@ -10,6 +10,7 @@ import common.ol_pd as olpd
 import common.ol_mysql as olsql
 import common.ol_util as olu
 from sqlalchemy.sql import text as text
+from tqdm import tqdm
 
 def load_task():
     todo_csv = olpd.load_data(olc.todo_file)
@@ -44,21 +45,84 @@ def load_option_list():
     print(olu.tn() + "Inserted OPTION_LIST Rows =", r.rowcount)
 
 
-def load_projected_quotes():
-    ol = olpd.load_data(olc.PROJECTION_DIR + "/**/*.csv",  recursive=True)
-    ol.to_sql(name="option_quote_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
+def load_projected_quotes(batch_size=5000):
+    """
+    Load projected quotes in batches to avoid memory issues.
+
+    Args:
+        batch_size: Number of files to process per batch
+    """
+    import glob
+    import pandas as pd
+
+    # Get all CSV files
+    pattern = olc.PROJECTION_DIR + "/**/*.csv"
+    files = list(glob.glob(pattern, recursive=True))
+    total_files = len(files)
+
+    if total_files == 0:
+        print(olu.tn() + "No projection files found!")
+        return
+
+    print(olu.tn() + f"Found {total_files} projection files to load")
+
+    # Process in batches
+    total_stock_rows = 0
+    total_option_rows = 0
+    num_batches = (total_files + batch_size - 1) // batch_size
+
+    # Progress bar for batches
+    with tqdm(total=num_batches, desc="Processing batches", unit="batch") as pbar_batch:
+        for batch_num, i in enumerate(range(0, total_files, batch_size), 1):
+            batch_files = files[i:i + batch_size]
+
+            # Load batch of files with progress bar
+            df_list = []
+            for file in tqdm(batch_files, desc=f"Batch {batch_num}/{num_batches}", leave=False, unit="file"):
+                try:
+                    df = pd.read_csv(file)
+                    df_list.append(df)
+                except Exception as e:
+                    tqdm.write(olu.tn() + f"Error reading {file}: {e}")
+                    continue
+
+            if not df_list:
+                pbar_batch.update(1)
+                continue
+
+            # Concatenate batch
+            ol = pd.concat(df_list, ignore_index=True)
+            tqdm.write(olu.tn() + f"  Batch {batch_num} contains {len(ol):,} rows")
+
+            # Write batch to temp table in chunks to avoid memory issues
+            if_exists = 'replace' if batch_num == 1 else 'append'
+            # Use chunksize to avoid loading everything into memory at once
+            ol.to_sql(name="option_quote_tmp", con=olsql.getEngine(), if_exists=if_exists,
+                     index=False, chunksize=10000, method='multi')
+
+            # Clear memory
+            del ol
+            del df_list
+            import gc
+            gc.collect()
+
+            pbar_batch.update(1)
+
+    # After all batches loaded, insert into final tables
+    print(olu.tn() + "All batches loaded. Inserting into final tables...")
+
     insertSQLOptions = """
     INSERT IGNORE INTO ol7.option_quote(quote_date, con_id, trade_low, trade_average, trade_high, trade_volume,
                      trade_barcount, bid_min, bid_avg, ask_avg, ask_max)
-    SELECT date, `conId`, trade_low, trade_average, trade_high, trade_volume, 
+    SELECT date, `conId`, trade_low, trade_average, trade_high, trade_volume,
                     `trade_barCount`, bid_min, bid_avg, ask_avg, ask_max
     FROM ol7.option_quote_tmp where `localSymbol` is not null;
     """
 
     insertSQLStocks = """
-    INSERT IGNORE INTO ol7.stock_quote (quote_date, con_id, trade_low, trade_average, trade_high, trade_volume, 
+    INSERT IGNORE INTO ol7.stock_quote (quote_date, con_id, trade_low, trade_average, trade_high, trade_volume,
                 trade_barcount, bid_min, bid_avg, ask_avg, ask_max, vix)
-    SELECT date, `conId`, trade_low, trade_average, trade_high, trade_volume, 
+    SELECT date, `conId`, trade_low, trade_average, trade_high, trade_volume,
                 `trade_barCount`, bid_min, bid_avg, ask_avg, ask_max, vix
     FROM ol7.option_quote_tmp  where symbol='AAPL'  and `localSymbol` is null;
     """
@@ -68,7 +132,7 @@ def load_projected_quotes():
         o = conn.execute(text(insertSQLOptions))
         d = conn.execute(text("DROP TABLE `ol7`.`option_quote_tmp`;"))
 
-    print(olu.tn() + "Inserted STOCK_QUTOE Rows =", s.rowcount)
+    print(olu.tn() + "Inserted STOCK_QUOTE Rows =", s.rowcount)
     print(olu.tn() + "Inserted OPTION_QUOTE Rows =", o.rowcount)
 
 
@@ -95,7 +159,7 @@ if __name__ == "__main__":
 
     load_task()
     load_option_list()
-    load_projected_quotes()
+    load_projected_quotes(batch_size=1000)
     cleanup()
 
     print(olu.tn() + "2p-load-to-mysql done!")
