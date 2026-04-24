@@ -4,8 +4,29 @@ REFERENCE_DIR = "../data/reference/"
 DATA_DIR = "../data/quotes/"
 PROJECTION_DIR = "../data/projection/"
 todo_file = "../data/status/todo.csv"
+task_db = "../data/status/ol7.sqlite"
 stock_list_json = "../data/reference/stock-list.json"
 option_list_csv = "../data/reference/option-list-*.csv"
+
+# Window-planning knobs. Each window ends on a trading Friday and covers an 8-calendar-day
+# IB reqHistoricalData call (whatToShow + 1-min bars + useRTH=True → ~6 trading days).
+NUM_WINDOWS = 5  # 5 Fridays ≈ 30 trading days of coverage
+WINDOW_DURATION = "8 D"
+
+# IB pacing. Keep conservatively under the 60-per-10-min cap and the 50-concurrent cap.
+IB_CONCURRENCY = 10
+IB_MAX_PER_10MIN = 55
+# Client-side timeout per reqHistoricalDataAsync. ib_insync defaults to 60s, which
+# is tight when the semaphore has many requests queued. A cancelled request
+# yields error 162 ("API historical data query cancelled") that we'd otherwise
+# have to treat as a retry — larger timeout means fewer spurious cancellations.
+IB_HIST_TIMEOUT = 180
+
+# Connection settings. Override via IB_HOST / IB_PORT / IB_CLIENT_ID env vars if desired.
+import os as _os
+IB_HOST = _os.environ.get("IB_HOST", "127.0.0.1")
+IB_PORT = int(_os.environ.get("IB_PORT", "7496"))
+IB_CLIENT_ID = int(_os.environ.get("IB_CLIENT_ID", "1"))
 
 model_generator_json = "../model/ref-data/model-generator.json"
 model_list_csv = "../model/ref-data/model-list.csv"
@@ -31,8 +52,8 @@ StrikeRange = 2
 ExpiryOut = 3
 
 
-database_host = 'localhost'
-database_user = 'rk_admin'
-database_password = 'rk2admin!'
-database_schema = 'ol7'
-database_schema_model = 'model'
+database_host = _os.environ.get("OL7_DB_HOST", "localhost")
+database_user = _os.environ.get("OL7_DB_USER", "rk_admin")
+database_password = _os.environ.get("OL7_DB_PASSWORD", "rk2admin!")
+database_schema = _os.environ.get("OL7_DB_SCHEMA", "ol7")
+database_schema_model = _os.environ.get("OL7_DB_SCHEMA_MODEL", "model")

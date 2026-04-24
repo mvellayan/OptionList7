@@ -1,102 +1,139 @@
-import sys
-import os
-from pathlib import Path
-uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
-f = os.path.realpath(__file__)
-sys.path.append(uppath(f, 2))
+"""
+Execute pending tasks from SQLite using async IB requests in parallel.
 
-from datetime import datetime, timedelta
-from ib_insync import *
-import pandas as pd
+For each pending/error row, issue reqHistoricalDataAsync for the right
+quote_type, mark the row done / no_data / error based on the result.
+Concurrency and pacing are controlled in common.ol_ib.
+"""
+import argparse
+import asyncio
+import os
+import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
+sys.path.append(uppath(os.path.realpath(__file__), 2))
+
+# NYSE closes at 16:00 US/Eastern. After that, today's 1-min bars are complete
+# and safe to include in the default run scope.
+_MARKET_CLOSE_HOUR_ET = 16
+_ET = ZoneInfo("US/Eastern")
+
+from ib_insync import Contract
+from tqdm import tqdm
+
 import common.ol_const as olc
+import common.ol_db as db
 import common.ol_ib as oli
 import common.ol_util as olu
-import common.ol_pd as olpd
-
-"""
-   4-execute-tasks
-   1. Read todo.csv
-    loop over todo.csv
-        call pull-history
-    update todo.csv
-"""
 
 
-def execute_todos(todo_file, save_interval=10):
-    """
-    Execute todo tasks from CSV file.
+def row_to_contract(row) -> Contract:
+    return Contract(
+        conId=int(row["con_id"]),
+        secType=row["sec_type"],
+        exchange=row["exchange"],
+        symbol=row["symbol"],
+        localSymbol=row["local_symbol"] or "",
+        currency="USD",
+    )
 
-    Args:
-        todo_file: Path to the todo CSV file
-        save_interval: Save progress every N tasks (default: 10)
-    """
-    todo_csv = pd.read_csv(todo_file, index_col=None)
-    todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
 
-    todo_csv.sort_values(by=['pull_date', 'localSymbol', 'symbol'], ascending=False, inplace=True)
-    todo_csv.reset_index(inplace=True, drop=True)
+async def run_one(conn, row, pbar: tqdm) -> None:
+    contract = row_to_contract(row)
+    end_date = str(row["window_end_date"])
+    qt = row["quote_type"]
 
-    # Pre-convert pull_date to string for all rows to avoid repeated conversions
-    todo_csv['pull_date_str'] = todo_csv['pull_date'].astype(str)
+    try:
+        result = await oli.pull_historical_async(contract, end_date, qt)
+    except Exception as e:
+        db.update_status(conn, row["con_id"], row["window_end_date"], qt,
+                         status="error", error=f"{type(e).__name__}: {e}")
+        pbar.update(1)
+        return
 
-    # Calculate today_date once outside the loop
-    xdate = datetime.now()
-    today_date = xdate.strftime("%Y%m%d")
+    err = (f"{result.error_code}: {result.error_msg}"
+           if result.error_code or result.error_msg else None)
+    db.update_status(conn, row["con_id"], row["window_end_date"], qt,
+                     status=result.status, error=err)
+    pbar.update(1)
 
-    total_rows = todo_csv.shape[0]
-    tasks_since_save = 0
 
-    for ind in range(total_rows):
-        row = todo_csv.iloc[ind]
+async def run_all(conn, rows) -> None:
+    # Concurrency is bounded by the semaphore inside ol_ib; we can schedule all
+    # coroutines and let the semaphore gate them.
+    with tqdm(total=len(rows), desc="Tasks", unit="task", ncols=100) as pbar:
+        await asyncio.gather(*(run_one(conn, r, pbar) for r in rows))
 
-        # Skip if status is done or error (> '4')
-        if row['status'] > '4':
-            continue
 
-        # Skip future dates
-        if row['pull_date_str'] > today_date:
-            continue
+def _default_include_today() -> tuple[bool, str]:
+    """Include today by default iff the US/Eastern clock is past 16:00."""
+    et_now = datetime.now(_ET)
+    if et_now.hour >= _MARKET_CLOSE_HOUR_ET:
+        return True, f"market closed ({et_now:%H:%M %Z})"
+    return False, f"market still open ({et_now:%H:%M %Z})"
 
-        print(olu.tn() + f"  processing: {ind}/{total_rows}: {row['pull_date']} {row['localSymbol']}/{row['symbol']}")
 
-        c = Contract(
-            conId=row['conId'],
-            secType=row['secType'],
-            exchange=row['exchange'],
-            symbol=row['symbol'],
-            localSymbol=row['localSymbol'],
-            currency='USD'
-        )
+def execute(*, date: int | None = None,
+            include_today: bool | None = None) -> None:
+    et_today_int = int(datetime.now(_ET).strftime("%Y%m%d"))
 
-        df = oli.check_pull_historical_quote_to_file(row['pull_date_str'], c)
-
-        # Update status based on result
-        current_status = row['status']
-        if df.shape[0] == 0:
-            if current_status == '1-todo':
-                todo_csv.at[ind, 'status'] = '2-todo'
-            elif current_status == '2-todo':
-                todo_csv.at[ind, 'status'] = '3-todo'
-            elif current_status == '3-todo':
-                todo_csv.at[ind, 'status'] = '9-error, after 3 tries'
+    with db.connect() as conn:
+        if date is not None:
+            rows = db.fetch_pending(conn, window_end_date=date)
+            scope = f"window_end_date={date}"
         else:
-            todo_csv.at[ind, 'status'] = '5-done'
+            if include_today is None:
+                include_today, reason = _default_include_today()
+            else:
+                reason = "explicit flag"
 
-        tasks_since_save += 1
+            if include_today:
+                rows = db.fetch_pending(conn)
+                scope = f"all pending incl. today — {reason}"
+            else:
+                rows = db.fetch_pending(conn, before=et_today_int)
+                scope = (f"window_end_date < {et_today_int} "
+                         f"(today excluded — {reason})")
 
-        # Save periodically instead of after every task
-        if tasks_since_save >= save_interval:
-            todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
-            olpd.save_todo_csv(todo_csv)
-            tasks_since_save = 0
+        if not rows:
+            print(olu.tn() + f"No pending tasks for scope: {scope}.")
+            return
 
-    # Final save for any remaining changes
-    if tasks_since_save > 0:
-        todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
-        olpd.save_todo_csv(todo_csv)
+        print(olu.tn() + f"Executing {len(rows)} tasks — {scope} "
+                         f"(concurrency={olc.IB_CONCURRENCY}, "
+                         f"pacing={olc.IB_MAX_PER_10MIN}/10min)")
+
+        ib = oli.get_ib()
+        ib.run(run_all(conn, rows))
+
+        summary = db.status_summary(conn)
+        print(olu.tn() + f"Status summary: {summary}")
+
+
+def _parse_args():
+    p = argparse.ArgumentParser(
+        description=("Execute pending IB historical-data tasks from SQLite. "
+                     "By default, today's window is included only after "
+                     "16:00 US/Eastern (NYSE close)."),
+    )
+    p.add_argument(
+        "--date", type=int, metavar="YYYYMMDD",
+        help="Only process tasks with this exact window_end_date.",
+    )
+    p.add_argument(
+        "--include-today", action=argparse.BooleanOptionalAction, default=None,
+        help="Force include/exclude today's window. Overrides the "
+             "market-close default.",
+    )
+    args = p.parse_args()
+    if args.date is not None and args.include_today is not None:
+        p.error("--date cannot be combined with --include-today/--no-include-today")
+    return args
 
 
 if __name__ == "__main__":
-    execute_todos(olc.todo_file)
+    args = _parse_args()
+    execute(date=args.date, include_today=args.include_today)
     print(olu.tn() + "4-execute-tasks done!")
-

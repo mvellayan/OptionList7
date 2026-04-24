@@ -1,191 +1,177 @@
-import sys
+"""
+Plan which (contract × window_end_date × quote_type) rows need pulling.
+
+Strategy:
+  1. Pick NUM_WINDOWS recent trading days as window_end_dates, spaced ~5
+     trading days apart. Each IB call with durationStr="8 D" + useRTH=True
+     returns ~6 trading days of 1-min bars, so 5-day spacing gives slight
+     overlap and covers ~30 trading days of history.
+  2. Pull the base stock (AAPL) windows synchronously so we can read the
+     trading range from the per-day TRADES files.
+  3. Walk every trading day in the configured range, look up its range from
+     the TRADES file, and union the resulting option lists.
+  4. Insert (contract × window_end_date × quote_type) rows into SQLite as
+     pending. Duplicates are skipped by the primary key.
+"""
 import os
-from pathlib import Path
-from datetime import datetime, timedelta
-
-from tqdm import tqdm
-
-uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
-f = os.path.realpath(__file__)
-sys.path.append(uppath(f, 2))
-
-import pandas as pd
-import common.ol_const as olc
-import common.ol_pd as olpd
-import common.ol_ib as oli
-import common.ol_util as olu
+import sys
+from datetime import datetime
 import warnings
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
+uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
+sys.path.append(uppath(os.path.realpath(__file__), 2))
 
-"""
-    3-plan-tasks 
-        1. Input Parameter: Date, stockContract
-        2. Pull stock quotes to file (if it doesn't exist) 
-        3. Find trading range
-        4. Build optionlist 
-                +/- 15% of trading range
-                +3 weeks
-                find how many days history to pull
-        5. Output to status/todo.csv file
-"""
+import pandas as pd
+from tqdm import tqdm
 
-def plan_tasks(iDate: int, stock):
-    sDate = str(iDate)
-    # This check is not needed.  It has already been performed by the caller.
-    # only look at last 30 days!
-    # cutoffDate = int(str((datetime.today() - timedelta(30)).date()).replace("-", ""))
-    # if int(sDate) < cutoffDate:
-    #    return
+import common.ol_const as olc
+import common.ol_db as db
+import common.ol_ib as oli
+import common.ol_pd as olpd
+import common.ol_util as olu
 
-    # read current quotes to figure out min/max trading range
-    df2 = oli.check_pull_historical_quote_to_file(sDate, stock)
-    if df2.shape[0] == 0:
-        print(f"No options defined for date: {sDate} trading range")
-        return
-
-    min_, max_ = df2['open'].agg(['min', 'max'])
-
-    # build list of options to pull
-    optionList = olpd.getOptionlist(stock, sDate, min_, max_, olc.StrikeRange, olc.ExpiryOut)
-    # if there are no rows, return!!
-    if optionList.shape[0] == 0:
-        print(f"No options defined for date: {sDate} trading range: {min_} - {max_}")
-        return
-
-    # Use pd.concat instead of deprecated append()
-    additional_rows = pd.DataFrame([
-        {'conId': stock.conId, 'symbol': stock.symbol, 'exchange': stock.exchange, 'secType': stock.secType},
-        {'conId': '13455763', 'symbol': 'VIX', 'exchange': 'CBOE', 'secType': 'IND'}
-    ])
-    optionList = pd.concat([optionList, additional_rows], ignore_index=True)
-    optionList['status'] = '1-todo'
-
-    # build a list of working days to pull quotes
-    # less than equal to parameter date
-    working_days = pd.read_csv(olc.market_days, index_col=None)
-    working_days = working_days.loc[working_days['working_date'] <= iDate]
-    working_days = working_days.sort_values(by=['working_date'], ascending=False)
-    working_days = working_days.head(28)  # pull only 3 weeks of data
-    working_days = working_days.reset_index(drop=True)
-
-    # read previous list of todo tasks
-    if os.path.exists(olc.todo_file):
-        todo_csv = pd.read_csv(olc.todo_file, index_col=None)
-    else:
-        todo_csv = pd.DataFrame()
-
-    # pull for past 15/22 days - collect all in list first, then concatenate once
-    task_lists = []
-    for idx in range(22):
-        current_list = optionList.copy()
-        pDate = str(round(working_days.loc[idx]['working_date']))
-        current_list["pull_date"] = pDate
-        task_lists.append(current_list)
-
-    # Single concatenation instead of 22 separate ones
-    if task_lists:
-        new_tasks = pd.concat(task_lists, axis=0, ignore_index=True)
-        todo_csv = pd.concat([new_tasks, todo_csv], axis=0, ignore_index=True)
-
-    todo_csv['conId'] = pd.to_numeric(todo_csv['conId'], downcast='integer')
-    todo_csv['pull_date'] = pd.to_numeric(todo_csv['pull_date'], downcast='integer')
-
-    # Combined sort and dedup in single operation
-    todo_csv = todo_csv.sort_values(['conId', 'pull_date', 'status'], ascending=False)
-    todo_csv.drop_duplicates(subset=['conId', 'pull_date'], keep='first', inplace=True)
-    todo_csv = todo_csv.sort_values(['pull_date', 'conId', 'status'], ascending=False)
-
-    #  Saves back to todo.csv file
-    todo_csv.to_csv(olc.todo_file, index=False)
-    print(olu.tn() + f"  Creating tasks for {sDate}.  Adding {optionList.shape} new total {todo_csv.shape}")
+warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
-def write_todo_to_file():
-    if os.path.exists(olc.todo_file):
-        todo_csv = pd.read_csv(olc.todo_file, index_col=None)
-    else:
-        print("Unexpected")
-        exit(1)
+VIX_CONID = 13455763  # matches the old hardcoded value
 
-    # Create a set of working dates for faster lookup
-    working_dates_set = set(todo_dates['working_date'].values)
 
-    # Collect all new rows first, then concatenate once at the end
-    new_rows = []
+def pick_window_end_dates(working_dates: list[int]) -> list[int]:
+    sorted_desc = sorted(working_dates, reverse=True)
+    chosen = sorted_desc[::5][:olc.NUM_WINDOWS]
+    return sorted(chosen)
 
-    for conid2 in todo_csv["conId"].unique():
-        # Filter once for this conId
-        conid_rows = todo_csv[todo_csv['conId'] == conid2]
 
-        opt_type = str(conid_rows["secType"].min())
-        if opt_type != "OPT":
+def pull_stock_windows(stock, window_end_dates: list[int]) -> None:
+    for d in window_end_dates:
+        sDate = str(d)
+        df = oli.check_pull_historical_quote_to_file(sDate, stock)
+        if df.empty:
+            print(olu.tn() + f"  Stock {stock.symbol} {sDate}: no TRADES data")
+
+
+def trading_range_for(stock, date_int: int) -> tuple[float, float] | None:
+    sDate = str(date_int)
+    sym = (stock.symbol.replace(" ", "") if stock.secType in ("STK", "IND")
+           else stock.localSymbol.replace(" ", ""))
+    fn = (olc.DATA_DIR + sDate[0:4] + "/" + sDate[4:6] + "/" + sDate[6:8]
+          + "/sq-TRADES-" + sym + ".csv")
+    if not os.path.exists(fn):
+        return None
+    df = pd.read_csv(fn)
+    if df.empty or "open" not in df.columns:
+        return None
+    return float(df["open"].min()), float(df["open"].max())
+
+
+def build_option_list_for_day(stock, sDate: str) -> pd.DataFrame:
+    rng = trading_range_for(stock, int(sDate))
+    if rng is None:
+        return pd.DataFrame()
+    min_, max_ = rng
+    return olpd.getOptionlist(stock, sDate, min_, max_,
+                              olc.StrikeRange, olc.ExpiryOut)
+
+
+def _opt_cell(row, key, cast=None):
+    val = row.get(key)
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    try:
+        if pd.isna(val):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if cast is not None:
+        return cast(val)
+    return val
+
+
+def rows_to_task_dicts(options_by_conid: dict[int, pd.Series],
+                        window_end_dates: list[int]) -> list[dict]:
+    out: list[dict] = []
+    for conid, r in options_by_conid.items():
+        for d in window_end_dates:
+            for qt in ("BID_ASK", "TRADES"):
+                if r["symbol"] == "VIX" and qt == "BID_ASK":
+                    continue
+                expiry = _opt_cell(r, "lastTradeDateOrContractMonth",
+                                   cast=lambda x: str(int(float(x))))
+                out.append(dict(
+                    con_id=int(conid),
+                    local_symbol=_opt_cell(r, "localSymbol"),
+                    symbol=r["symbol"],
+                    sec_type=r["secType"],
+                    exchange=_opt_cell(r, "exchange"),
+                    expiry=expiry,
+                    strike=_opt_cell(r, "strike", cast=float),
+                    right=_opt_cell(r, "right"),
+                    multiplier=_opt_cell(r, "multiplier", cast=float),
+                    window_end_date=int(d),
+                    quote_type=qt,
+                    status="pending",
+                    attempt_count=0,
+                    last_error=None,
+                ))
+    return out
+
+
+def plan(stock):
+    market_days = pd.read_csv(olc.market_days, index_col=None)
+    market_days = market_days.astype({"working_date": int, "working_hour": float})
+    in_range = market_days.loc[
+        (market_days["working_date"] > olc.STOCK_PULL_START_DATE)
+        & (market_days["working_date"] <= olc.STOCK_PULL_END_DATE)
+    ]
+    if in_range.empty:
+        print("NO CURRENT WORKING DATE. fix market-days.csv file!")
+        sys.exit(1)
+
+    window_end_dates = pick_window_end_dates(in_range["working_date"].tolist())
+    print(olu.tn() + f"Window end dates: {window_end_dates}")
+
+    print(olu.tn() + "Pulling stock windows for trading-range lookup...")
+    pull_stock_windows(stock, window_end_dates)
+
+    print(olu.tn() + f"Scanning {len(in_range)} trading days for option candidates...")
+    options_by_conid: dict[int, pd.Series] = {}
+    for d in tqdm(sorted(in_range["working_date"].tolist()),
+                  desc="Trading days", unit="day", ncols=100):
+        sDate = str(int(d))
+        opt = build_option_list_for_day(stock, sDate)
+        if opt.empty:
             continue
+        for _, r in opt.iterrows():
+            options_by_conid[int(r["conId"])] = r
 
-        min_pull = str(conid_rows["pull_date"].min())
-        max_symbol = "20" + conid_rows["localSymbol"].iloc[0].strip()[6:12]
-        min_date = datetime.strptime(min_pull, "%Y%m%d")
-        max_date = datetime.strptime(max_symbol, "%Y%m%d")
+    print(olu.tn() + f"Discovered {len(options_by_conid)} unique option contracts")
 
-        # Get existing pull_dates for this conId for faster lookup
-        existing_dates = set(conid_rows['pull_date'].astype(str).values)
+    # Include the stock and VIX as tasks so the executor handles them uniformly.
+    options_by_conid[int(stock.conId)] = pd.Series({
+        "conId": int(stock.conId), "symbol": stock.symbol,
+        "exchange": stock.exchange, "secType": stock.secType,
+    })
+    options_by_conid[VIX_CONID] = pd.Series({
+        "conId": VIX_CONID, "symbol": "VIX",
+        "exchange": "CBOE", "secType": "IND",
+    })
 
-        # Template row for this conId
-        template_row = conid_rows.iloc[[0]].copy()
+    tasks = rows_to_task_dicts(options_by_conid, window_end_dates)
+    print(olu.tn() + f"Candidate task rows: {len(tasks)}")
 
-        oneday = timedelta(days=1)
-        current_date = min_date
-        while current_date < max_date:
-            current_date += oneday
-            date_str = current_date.strftime("%Y%m%d")
-            date_int = int(date_str)
+    with db.connect() as conn:
+        inserted = db.insert_tasks(conn, tasks)
+        summary = db.status_summary(conn)
 
-            # Fast set lookup instead of DataFrame filtering
-            if date_int not in working_dates_set:
-                continue
-
-            if date_str in existing_dates:
-                continue
-
-            # Create new row
-            new_row = template_row.copy()
-            new_row["pull_date"] = date_str
-            new_row["status"] = "1-todo"
-            new_rows.append(new_row)
-
-    # Single concatenation at the end
-    if new_rows:
-        todo_csv = pd.concat([todo_csv] + new_rows, ignore_index=True)
-
-    olpd.save_todo_csv(todo_csv)
+    print(olu.tn() + f"Inserted {inserted} new task rows (rest already existed).")
+    print(olu.tn() + f"Status summary: {summary}")
 
 
 if __name__ == "__main__":
-    print(olu.tn() + "3-planed-tasks Starting!")
+    print(olu.tn() + "3-plan-tasks Starting!")
 
-    # 1. build list of dates
-    todo_dates = pd.read_csv(olc.market_days, index_col=None)
-    todo_dates = todo_dates.astype({"working_date": int, "working_hour": float})
-
-    lp = todo_dates.loc[(todo_dates['working_date'] > olc.STOCK_PULL_START_DATE) & (todo_dates['working_date'] <= olc.STOCK_PULL_END_DATE)]
-#    lp = lp.sort_values('working_date', ascending=False)
-
-    if lp.shape[0] == 0:
-        print("NO CURRENT WORKING DATE.  fix market-days.csv file!!")
-        exit(1)
-
-    #2. get stock.
-    # Hard coded for the 1st one -- AAPL
-    # TODO loop around a list
-    configStocks = olu.getConfig(olc.stock_list_json)
-    stock = oli.getContract(configStocks.get("stocks")[0]['contract'])
-
-    tqdm.pandas(desc="Working Dates", unit="date", colour="green", ncols=100)
-    #Loop for each date
-    lp['working_date'].progress_apply(plan_tasks, stock=stock)
-
-    print(olu.tn() + "Filling in missing quotes!")
-
-    write_todo_to_file()
+    config = olu.getConfig(olc.stock_list_json)
+    stock = oli.getContract(config.get("stocks")[0]["contract"])
+    plan(stock)
 
     print(olu.tn() + "3-plan-tasks done!")

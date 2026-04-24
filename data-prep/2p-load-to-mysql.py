@@ -5,7 +5,10 @@ up_path = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
 f = os.path.realpath(__file__)
 sys.path.append(up_path(f, 2))
 
+import pandas as pd
+
 import common.ol_const as olc
+import common.ol_db as oldb
 import common.ol_pd as olpd
 import common.ol_mysql as olsql
 import common.ol_util as olu
@@ -13,18 +16,41 @@ from sqlalchemy.sql import text as text
 from tqdm import tqdm
 
 def load_task():
-    todo_csv = olpd.load_data(olc.todo_file)
-    todo_csv[["conId", "pull_date"]] = todo_csv[["conId", "pull_date"]].fillna(0.0).astype(int)
-    todo_csv.to_sql(name="task_tmp", con=olsql.getEngine(), if_exists='replace', index=False)
+    """Export SQLite task state to MySQL ol7.task (one row per con_id × pull_date)."""
+    with oldb.connect() as conn:
+        df = pd.read_sql_query(
+            """
+            SELECT con_id          AS conId,
+                   symbol,
+                   local_symbol    AS localSymbol,
+                   expiry          AS lastTradeDateOrContractMonth,
+                   strike,
+                   right,
+                   multiplier,
+                   exchange,
+                   sec_type        AS secType,
+                   status,
+                   window_end_date AS pull_date
+              FROM task
+            """,
+            conn,
+        )
+
+    # MySQL task table doesn't distinguish BID_ASK vs TRADES — collapse.
+    df = df.drop_duplicates(subset=["conId", "pull_date"], keep="first")
+    df[["conId", "pull_date"]] = df[["conId", "pull_date"]].fillna(0).astype(int)
+
+    df.to_sql(name="task_tmp", con=olsql.getEngine(),
+              if_exists="replace", index=False)
     insertSQL = """
-        INSERT IGNORE INTO `ol7`.`task`(`con_id`, `symbol`, `expiry`, `strike`, `right`, 
+        INSERT IGNORE INTO `ol7`.`task`(`con_id`, `symbol`, `expiry`, `strike`, `right`,
         `multiplier`, `exchange`,`secType`, `status`, `pull_date`)
-            SELECT `conId`, ifnull(`localSymbol`,`symbol`) symbol, `lastTradeDateOrContractMonth`, `strike`, `right`, 
+            SELECT `conId`, ifnull(`localSymbol`,`symbol`) symbol, `lastTradeDateOrContractMonth`, `strike`, `right`,
             `multiplier`, `exchange`, `secType`, `status`, `pull_date` FROM `ol7`.`task_tmp`;
     """
     with olsql.getEngine().connect().execution_options(autocommit=True) as conn:
         r = conn.execute(text(insertSQL))
-        d = conn.execute(text("DROP TABLE `ol7`.`task_tmp`;"))
+        conn.execute(text("DROP TABLE `ol7`.`task_tmp`;"))
 
     print(olu.tn() + "Inserted TASK Rows =", r.rowcount)
 

@@ -130,14 +130,3 @@ def getOptionlist(contract: Contract, sDate: str, min_, max_, strikeRange: int =
     df['secType'] = 'OPT'
     return df
 
-def save_todo_csv(todo_csv):
-    todo_csv['conId'] = pd.to_numeric(todo_csv['conId'], downcast='integer')
-    todo_csv['pull_date'] = pd.to_numeric(todo_csv['pull_date'], downcast='integer')
-    todo_csv = todo_csv.sort_values(['conId', 'pull_date', 'status'], ascending=False)
-    todo_csv.drop_duplicates(subset=['conId', 'pull_date'], keep='first', inplace=True)
-    #todo_csv = todo_csv.sort_values(['pull_date', 'conId'], ascending=False)
-    todo_csv = todo_csv.sort_values(['lastTradeDateOrContractMonth', 'pull_date', 'conId'], ascending=[True, False, True])
-
-    # todo_csv = todo_csv.sort_values('status', ascending=False).drop_duplicates(['conId', 'pull_date']).sort_index()
-    #  Saves back to todo.csv file
-    todo_csv.to_csv(olc.todo_file, index=False)
