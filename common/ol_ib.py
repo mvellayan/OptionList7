@@ -9,13 +9,33 @@ import asyncio
 import os
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from ib_insync import IB, Contract, util
 
 import common.ol_const as olc
+
+
+_ET = ZoneInfo("US/Eastern")
+_UTC = ZoneInfo("UTC")
+
+
+def _format_end_datetime(end_date: str) -> str:
+    """
+    Convert 'YYYYMMDD' to the UTC dash form IB's reqHistoricalData expects:
+    'YYYYMMDD-HH:MM:SS' at 16:00 US/Eastern (market close), converted to UTC.
+
+    We use the UTC form because the space-separated 'YYYYMMDD HH:MM:SS TZ'
+    form is accepted inconsistently by recent TWS builds (error 10314).
+    """
+    dt_et = datetime.strptime(end_date, "%Y%m%d").replace(
+        hour=16, minute=0, second=0, tzinfo=_ET,
+    )
+    return dt_et.astimezone(_UTC).strftime("%Y%m%d-%H:%M:%S")
 
 
 # --- Connection --------------------------------------------------------------
@@ -172,9 +192,10 @@ async def pull_historical_async(contract: Contract, end_date: str,
         try:
             bars = await ib.reqHistoricalDataAsync(
                 contract,
-                # New IB API date format: "yyyymmdd hh:mm:ss US/Eastern".
-                # The old unqualified form triggers deprecation warning 2174.
-                endDateTime=end_date + " 16:00:00 US/Eastern",
+                # UTC dash form — avoids both the deprecation warning on the
+                # unqualified "YYYYMMDD HH:MM:SS" form and error 10314 that
+                # some TWS builds emit for "YYYYMMDD HH:MM:SS US/Eastern".
+                endDateTime=_format_end_datetime(end_date),
                 durationStr=olc.WINDOW_DURATION,
                 barSizeSetting="1 min",
                 whatToShow=quote_type,
